@@ -1,35 +1,309 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0f766e"><title>مركز سند | الإدارة</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0f766e">
+<title>مركز سند | الإدارة</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-:root{--teal:#0f766e;--teal2:#115e59;--bg:#f4f7f8;--ink:#172b35;--muted:#6b7c85;--line:#e1e9ec;--white:#fff;--orange:#e9a23b;--red:#b93838}*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,'Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg);color:var(--ink)}button,input,select,textarea{font:inherit}button{cursor:pointer}.app{min-height:100vh;display:grid;grid-template-columns:240px 1fr}.side{background:#103c3b;color:white;padding:20px 14px;display:flex;flex-direction:column;gap:8px}.brand{padding:8px 10px 20px;border-bottom:1px solid #ffffff25;margin-bottom:8px}.brand b{font-size:24px;display:block}.brand small{color:#c3e2df}.nav{border:0;background:transparent;color:#d6e8e7;text-align:right;padding:12px;border-radius:10px}.nav.active,.nav:hover{background:#ffffff19;color:white}.side-note{margin-top:auto;font-size:12px;color:#b7d1d0;line-height:1.8;padding:10px}.main{min-width:0}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:18px 24px;background:white;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:3}.top h1{font-size:20px;margin:0}.top small{color:var(--muted)}.content{padding:22px;max-width:1400px;margin:auto}.notice{background:#fff7e7;border:1px solid #f2d6a3;color:#6d4a12;padding:12px 14px;border-radius:12px;margin-bottom:18px;font-size:13px;line-height:1.7}.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}.stat,.panel,.dept{background:white;border:1px solid var(--line);border-radius:15px;padding:17px}.stat span{font-size:13px;color:var(--muted)}.stat strong{display:block;font-size:28px;margin-top:8px}.section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:22px 0 12px}.section-head h2{font-size:18px;margin:0}.btn{border:0;border-radius:9px;padding:10px 14px;background:var(--teal);color:white}.btn:hover{background:var(--teal2)}.btn.secondary{background:#e5f2f0;color:var(--teal2)}.btn.ghost{background:white;border:1px solid var(--line);color:var(--ink)}.grid-depts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.dept{padding:15px}.dept .emoji{font-size:24px}.dept b{display:block;margin:9px 0 5px}.dept small{color:var(--muted)}.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}.toolbar input,.toolbar select,.field input,.field select,.field textarea{width:100%;padding:11px;border:1px solid #cfdbdf;border-radius:9px;background:white;color:var(--ink)}.toolbar input{flex:1;min-width:170px}.table-wrap{overflow:auto;background:white;border:1px solid var(--line);border-radius:12px}table{border-collapse:collapse;width:100%;min-width:680px}th,td{text-align:right;padding:12px;border-bottom:1px solid var(--line);font-size:13px;white-space:nowrap}th{background:#f8fafb;color:#5b6c74}tr:last-child td{border-bottom:0}.empty{text-align:center;color:var(--muted);padding:28px}.field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.field label{font-size:13px;color:#53666e;display:block;margin-bottom:6px}.field.full{grid-column:1/-1}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.pill{display:inline-block;background:#e5f4ed;color:#206b4a;padding:4px 8px;border-radius:30px;font-size:12px}.page{display:none}.page.active{display:block}.mobile-menu{display:none}.small-muted{font-size:12px;color:var(--muted)}.footer{margin-top:20px;color:var(--muted);font-size:12px;text-align:center}
-@media(max-width:900px){.app{grid-template-columns:1fr}.side{display:none;position:fixed;z-index:10;inset:0 0 0 auto;width:260px;box-shadow:-10px 0 30px #0002}.side.open{display:flex}.mobile-menu{display:inline-block}.top{padding:14px 16px}.content{padding:14px}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.grid-depts{grid-template-columns:repeat(2,minmax(0,1fr))}.field-grid{grid-template-columns:1fr}.field.full{grid-column:auto}}
-@media(max-width:380px){.grid-depts{grid-template-columns:1fr}.stat strong{font-size:23px}}
-</style></head><body>
-<div class="app"><aside class="side" id="sidebar"><div class="brand"><b>مركز سند</b><small>للعلاج الطبيعي المكثف والتأهيل</small></div><button class="nav active" data-page="dashboard">⌂　الرئيسية</button><button class="nav" data-page="patients">♙　المرضى</button><button class="nav" data-page="appointments">▦　المواعيد</button><button class="nav" data-page="departments">✚　الأقسام</button><button class="nav" data-page="finance">ج.م　الحسابات</button><button class="nav" data-page="reports">▤　التقارير والتصدير</button><button class="nav" data-page="staff">♧　الموظفون والصلاحيات</button><button class="nav" data-page="settings">⚙　الإعدادات</button><div class="side-note">نسخة تجريبية أولية<br>لا تدخل بيانات مرضى حقيقية هنا.</div></aside>
-<main class="main"><header class="top"><div style="display:flex;align-items:center;gap:10px"><button class="btn secondary mobile-menu" id="menuBtn">☰</button><div><h1 id="pageTitle">الرئيسية</h1><small>نظام إدارة مركز سند</small></div></div><span class="pill">نسخة تجريبية</span></header><div class="content">
-<div class="notice"><b>تنبيه مهم:</b> دي نسخة أولية للواجهة والتجربة فقط. البيانات محفوظة محليًا على نفس المتصفح وليست محمية بنظام مستخدمين وخادم آمن؛ استخدم بيانات وهمية فقط، ولا تسجل معلومات مرضى حقيقية قبل ربط قاعدة بيانات آمنة وصلاحيات وصول.</div>
-<section class="page active" id="page-dashboard"><div class="stats"><div class="stat"><span>إجمالي المرضى التجريبيين</span><strong id="statPatients">0</strong></div><div class="stat"><span>مواعيد مسجلة</span><strong id="statAppointments">0</strong></div><div class="stat"><span>إيرادات مسجلة (ج.م)</span><strong id="statIncome">0</strong></div><div class="stat"><span>الأقسام</span><strong>8</strong></div></div><div class="section-head"><h2>أقسام المركز</h2><button class="btn secondary" data-goto="departments">عرض الأقسام</button></div><div class="grid-depts" id="dashDepts"></div><div class="section-head"><h2>آخر المرضى التجريبيين</h2><button class="btn" data-goto="patients">إضافة مريض</button></div><div class="table-wrap"><table><thead><tr><th>رقم الملف</th><th>الاسم التجريبي</th><th>القسم</th><th>الهاتف</th></tr></thead><tbody id="recentPatients"></tbody></table></div></section>
-<section class="page" id="page-patients"><div class="section-head"><h2>سجل المرضى التجريبي</h2><button class="btn" id="newPatientBtn">+ مريض جديد</button></div><div id="patientFormPanel" class="panel" style="display:none;margin-bottom:16px"><h3 style="margin-top:0">إضافة ملف تجريبي</h3><form id="patientForm"><div class="field-grid"><div class="field"><label>الاسم (استخدم اسمًا وهميًا)</label><input name="name" required placeholder="مثال: مريض تجريبي ١"></div><div class="field"><label>رقم الهاتف التجريبي</label><input name="phone" placeholder="اختياري"></div><div class="field"><label>القسم</label><select name="department" id="patientDepartment" required></select></div><div class="field"><label>النوع</label><select name="gender"><option value="غير محدد">غير محدد</option><option>ذكر</option><option>أنثى</option></select></div><div class="field full"><label>ملاحظات غير حساسة للتجربة فقط</label><textarea name="notes" rows="2" placeholder="لا تدخل تشخيصات أو معلومات طبية حقيقية"></textarea></div></div><div class="actions"><button class="btn" type="submit">حفظ تجريبي</button><button class="btn ghost" type="button" id="cancelPatient">إلغاء</button></div></form></div><div class="toolbar"><input id="patientSearch" placeholder="ابحث بالاسم أو رقم الملف..."><select id="patientFilter"><option value="">كل الأقسام</option></select><button class="btn secondary" id="exportPatients">تصدير CSV</button></div><div class="table-wrap"><table><thead><tr><th>رقم الملف</th><th>الاسم</th><th>القسم</th><th>النوع</th><th>الهاتف</th><th>تاريخ الإضافة</th></tr></thead><tbody id="patientsTable"></tbody></table></div></section>
-<section class="page" id="page-appointments"><div class="section-head"><h2>المواعيد</h2><button class="btn" id="newAppointmentBtn">+ موعد تجريبي</button></div><div id="appointmentPanel" class="panel" style="display:none;margin-bottom:16px"><form id="appointmentForm"><div class="field-grid"><div class="field"><label>اسم تجريبي</label><input name="patient" required placeholder="مريض تجريبي"></div><div class="field"><label>القسم</label><select name="department" id="appointmentDepartment" required></select></div><div class="field"><label>التاريخ</label><input name="date" type="date" required></div><div class="field"><label>الوقت</label><input name="time" type="time" required></div><div class="field full"><label>الحالة</label><select name="status"><option>مؤكد</option><option>بانتظار التأكيد</option><option>تمت الجلسة</option><option>أُلغي</option></select></div></div><div class="actions"><button class="btn">حفظ الموعد التجريبي</button><button class="btn ghost" type="button" id="cancelAppointment">إلغاء</button></div></form></div><div class="table-wrap"><table><thead><tr><th>الاسم التجريبي</th><th>القسم</th><th>التاريخ</th><th>الوقت</th><th>الحالة</th></tr></thead><tbody id="appointmentsTable"></tbody></table></div></section>
-<section class="page" id="page-departments"><div class="section-head"><h2>الأقسام الثمانية</h2></div><div class="grid-depts" id="allDepts"></div><p class="small-muted">تم فصل علاج الكبار رجالًا عن علاج الكبار سيدات في الأقسام والبيانات.</p></section>
-<section class="page" id="page-finance"><div class="section-head"><h2>الحسابات التجريبية</h2></div><div class="panel"><p>هذه شاشة تمهيدية فقط. لم يتم بعد بناء دفتر الإيرادات والمصروفات والإيصالات وربطها بصلاحيات آمنة.</p><div class="stats"><div class="stat"><span>إجمالي الإيرادات التجريبية</span><strong id="financeIncome">0 ج.م</strong></div><div class="stat"><span>إجمالي المصروفات التجريبية</span><strong>0 ج.م</strong></div></div></div></section>
-<section class="page" id="page-reports"><div class="section-head"><h2>التقارير والتصدير</h2></div><div class="panel"><p>يمكنك تصدير سجل المرضى التجريبي إلى CSV من صفحة المرضى. التقارير المالية والإحصائية التفصيلية ستُستكمل بعد ربط قاعدة البيانات.</p><button class="btn" data-goto="patients">فتح سجل المرضى</button></div></section>
-<section class="page" id="page-staff"><div class="section-head"><h2>الموظفون والصلاحيات</h2></div><div class="panel"><p><b>الأدوار المطلوبة:</b> مدير عام، استقبال، أخصائي، محاسب، مدير قسم.</p><p>لم يتم تفعيل حسابات الدخول والصلاحيات الحقيقية في هذه النسخة؛ لا تعتبر إخفاء الشاشات بديلًا عن الحماية على الخادم.</p></div></section>
-<section class="page" id="page-settings"><div class="section-head"><h2>الإعدادات</h2></div><div class="panel"><p>مركز سند للعلاج الطبيعي المكثف والتأهيل</p><p>واجهة عربية متوافقة مع شاشة الموبايل.</p><button class="btn secondary" id="clearDemo">مسح بيانات التجربة من هذا المتصفح</button><p class="small-muted">المسح لا يمكن التراجع عنه.</p></div></section>
-<div class="footer">مركز سند — نسخة واجهة تجريبية، وليست جاهزة للاستخدام الطبي الفعلي.</div>
-</div></main></div>
+:root{--green:#0f766e;--dark:#134e4a;--bg:#f4f7f8;--white:#fff;--text:#193333;--muted:#718282;--border:#e1e9e9;--red:#b91c1c}
+*{box-sizing:border-box}
+body{margin:0;font-family:Tahoma,Arial,sans-serif;background:var(--bg);color:var(--text)}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer;border:0;border-radius:10px;padding:11px 15px;background:var(--green);color:white}
+button.secondary{background:#e7f3f1;color:var(--dark)}
+input,select,textarea{width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;background:white;color:var(--text)}
+label{display:block;font-size:13px;margin-bottom:6px}
+.field{margin-bottom:12px}
+h1,h2,h3,p{margin-top:0}
+h1{font-size:23px}h2{font-size:18px}h3{font-size:15px}
+.muted{color:var(--muted);font-size:13px}
+.hidden{display:none!important}
+#login{max-width:420px;margin:9vh auto;padding:25px;background:white;border-radius:18px;box-shadow:0 8px 35px #173b3b12}
+.brand{color:var(--green);font-size:25px;font-weight:bold;margin-bottom:8px}
+#app{display:none;min-height:100vh}
+header{background:white;border-bottom:1px solid var(--border);padding:15px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:5}
+.layout{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:calc(100vh - 65px)}
+nav{background:var(--dark);padding:18px 12px;color:white}
+nav button{display:block;width:100%;text-align:right;margin:4px 0;background:transparent;color:#d8eeeb}
+nav button.active,nav button:hover{background:#ffffff20;color:white}
+main{padding:22px;min-width:0}
+.page{display:none}.page.active{display:block}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.card{background:white;border:1px solid var(--border);border-radius:15px;padding:17px;min-width:0}
+.stat{font-size:28px;font-weight:bold;margin:12px 0 5px;color:var(--green)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.sectionhead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:15px;flex-wrap:wrap}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:12px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap}
+th{color:var(--muted);font-weight:normal}
+.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.chart{display:flex;align-items:flex-end;justify-content:space-around;height:180px;gap:12px;padding-top:20px}
+.barcol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:7px;min-width:0}
+.bar{width:min(48px,80%);min-height:3px;background:#0f9b8e;border-radius:7px 7px 2px 2px}
+.barlabel{font-size:11px;color:var(--muted);text-align:center}
+.barvalue{font-size:11px}
+.pill{background:#e8f5f2;color:#0f766e;border-radius:20px;padding:5px 9px;font-size:12px}
+.notice{background:#fff8e6;padding:12px;border-radius:10px;font-size:13px;line-height:1.8;margin-bottom:15px}
+#message{margin:10px 0;font-size:13px;line-height:1.7}
+@media(max-width:850px){.layout{grid-template-columns:1fr}nav{display:flex;overflow:auto;padding:8px;gap:5px}nav button{width:auto;min-width:max-content;text-align:center;margin:0}main{padding:14px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.two{grid-template-columns:1fr}header{padding:12px}}
+@media(max-width:420px){.formgrid{grid-template-columns:1fr}.stat{font-size:24px}}
+</style>
+</head>
+<body>
+
+<section id="login">
+  <div class="brand">سند | SANAD</div>
+  <h2>إدارة مركز سند للعلاج الطبيعي والتأهيل</h2>
+  <p class="muted">سجّل الدخول بحساب الموظف المسجّل في النظام.</p>
+  <div class="field"><label>البريد الإلكتروني</label><input id="email" type="email" autocomplete="username" placeholder="name@example.com"></div>
+  <div class="field"><label>كلمة المرور</label><input id="password" type="password" autocomplete="current-password" placeholder="كلمة المرور"></div>
+  <button id="loginBtn" style="width:100%" onclick="login()">تسجيل الدخول</button>
+  <div id="loginMsg" role="status"></div>
+</section>
+
+<div id="app">
+<header>
+  <div><strong>مركز سند</strong><div class="muted">نظام الإدارة الداخلية</div></div>
+  <button class="secondary" onclick="logout()">تسجيل الخروج</button>
+</header>
+<div class="layout">
+<nav id="nav">
+  <button class="active" data-page="dashboard">لوحة التحكم</button>
+  <button data-page="patients">المرضى</button>
+  <button data-page="appointments">المواعيد</button>
+  <button data-page="departments">الأقسام</button>
+</nav>
+<main>
+  <div class="notice">نسخة أولية للاختبار. لا تُدخل بيانات مرضى حقيقية قبل إتمام اختبار الصلاحيات وتأمين الوصول.</div>
+  <div id="message" role="status"></div>
+
+  <section id="dashboard" class="page active">
+    <h1>لوحة التحكم</h1>
+    <p class="muted">ملخص بيانات المركز المسجلة في قاعدة البيانات.</p>
+    <div class="grid">
+      <div class="card"><div class="muted">إجمالي المرضى</div><div class="stat" id="totalPatients">—</div><div class="muted">مرضى مسجلون</div></div>
+      <div class="card"><div class="muted">إجمالي المواعيد</div><div class="stat" id="totalAppointments">—</div><div class="muted">مواعيد محفوظة</div></div>
+      <div class="card"><div class="muted">مواعيد اليوم</div><div class="stat" id="todayAppointments">—</div><div class="muted">حسب تاريخ الموعد</div></div>
+      <div class="card"><div class="muted">أقسام المركز</div><div class="stat">8</div><div class="muted">أقسام رئيسية</div></div>
+    </div>
+    <div class="two">
+      <div class="card"><h2>المرضى حسب القسم</h2><div id="departmentChart" class="chart"></div><p class="muted">رسم بياني مبني على بيانات المرضى المسجلة.</p></div>
+      <div class="card"><h2>حالة المواعيد</h2><div id="appointmentChart" class="chart"></div><p class="muted">توزيع المواعيد حسب الحالة.</p></div>
+    </div>
+    <div class="card" style="margin-top:16px"><h2>آخر المرضى المسجلين</h2><div class="tablewrap"><table><thead><tr><th>الاسم</th><th>القسم</th><th>تاريخ التسجيل</th></tr></thead><tbody id="recentPatients"></tbody></table></div></div>
+  </section>
+
+  <section id="patients" class="page">
+    <div class="sectionhead"><h1>إدارة المرضى</h1><button onclick="showForm('patientForm')">إضافة مريض</button></div>
+    <div id="patientForm" class="card hidden">
+      <h2>بيانات المريض</h2>
+      <div class="formgrid">
+        <div class="field"><label>اسم المريض *</label><input id="pName" required></div>
+        <div class="field"><label>رقم الهاتف</label><input id="pPhone" type="tel"></div>
+        <div class="field"><label>القسم</label><select id="pDepartment"></select></div>
+        <div class="field"><label>ملاحظات إدارية غير حساسة</label><input id="pNotes"></div>
+      </div>
+      <button onclick="addPatient()">حفظ المريض</button> <button class="secondary" onclick="showForm('patientForm',false)">إلغاء</button>
+    </div>
+    <div class="card" style="margin-top:16px"><div class="field"><label>بحث بالاسم أو الهاتف</label><input id="patientSearch" oninput="renderPatients()" placeholder="ابحث عن مريض..."></div>
+      <div class="tablewrap"><table><thead><tr><th>الاسم</th><th>الهاتف</th><th>القسم</th><th>تاريخ التسجيل</th></tr></thead><tbody id="patientRows"></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="appointments" class="page">
+    <div class="sectionhead"><h1>إدارة المواعيد</h1><button onclick="showForm('appointmentForm')">إضافة موعد</button></div>
+    <div id="appointmentForm" class="card hidden">
+      <h2>موعد جديد</h2>
+      <div class="field"><label>المريض *</label><select id="aPatient"></select></div>
+      <div class="formgrid">
+        <div class="field"><label>التاريخ والوقت *</label><input id="aDate" type="datetime-local"></div>
+        <div class="field"><label>الحالة</label><select id="aStatus"><option value="scheduled">مجدول</option><option value="completed">مكتمل</option><option value="cancelled">ملغي</option></select></div>
+      </div>
+      <button onclick="addAppointment()">حفظ الموعد</button> <button class="secondary" onclick="showForm('appointmentForm',false)">إلغاء</button>
+    </div>
+    <div class="card" style="margin-top:16px"><div class="tablewrap"><table><thead><tr><th>المريض</th><th>التاريخ والوقت</th><th>الحالة</th></tr></thead><tbody id="appointmentRows"></tbody></table></div></div>
+  </section>
+
+  <section id="departments" class="page">
+    <h1>أقسام المركز</h1>
+    <p class="muted">القائمة التعريفية للأقسام الرئيسية في مركز سند.</p>
+    <div class="grid" id="departmentCards"></div>
+  </section>
+</main>
+</div>
+</div>
+
 <script>
-const departments=[['peds','👶','العلاج الطبيعي للأطفال'],['speech','🗣️','التخاطب'],['ot','🧩','العلاج الوظيفي'],['sensory','🌈','التكامل الحسي'],['adult-m','🧑','علاج طبيعي للكبار — رجال'],['adult-f','👩','علاج طبيعي للكبار — سيدات'],['hydro','💧','العلاج المائي'],['nutrition','🥗','التغذية العلاجية']];
-const key='sanad_demo_v1';let data={patients:[],appointments:[]};try{data=Object.assign(data,JSON.parse(localStorage.getItem(key)||'{}'))}catch(e){}
-const $=id=>document.getElementById(id);function save(){try{localStorage.setItem(key,JSON.stringify(data))}catch(e){}render()};function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}function deptName(id){return (departments.find(d=>d[0]===id)||[])[2]||id}function deptCards(){return departments.map(d=>`<div class="dept"><div class="emoji">${d[1]}</div><b>${d[2]}</b><small>${data.patients.filter(p=>p.department===d[0]).length} ملفات تجريبية</small></div>`).join('')}
-function options(){return departments.map(d=>`<option value="${d[0]}">${d[2]}</option>`).join('')};['patientDepartment','appointmentDepartment'].forEach(id=>$(id).innerHTML=options());$('patientFilter').innerHTML += options();
-function render(){const q=($('patientSearch')?.value||'').trim().toLowerCase(),f=$('patientFilter')?.value||'';const ps=data.patients.filter(p=>(!f||p.department===f)&&(!q||(p.name+' '+p.file).toLowerCase().includes(q)));$('statPatients').textContent=data.patients.length;$('statAppointments').textContent=data.appointments.length;$('statIncome').textContent='0';$('financeIncome').textContent='0 ج.م';$('dashDepts').innerHTML=deptCards();$('allDepts').innerHTML=deptCards();$('patientsTable').innerHTML=ps.length?ps.map(p=>`<tr><td>${esc(p.file)}</td><td>${esc(p.name)}</td><td>${esc(deptName(p.department))}</td><td>${esc(p.gender)}</td><td>${esc(p.phone||'—')}</td><td>${esc(p.date)}</td></tr>`).join(''):'<tr><td colspan="6" class="empty">لا توجد ملفات تجريبية بعد</td></tr>';$('recentPatients').innerHTML=data.patients.slice(-5).reverse().map(p=>`<tr><td>${esc(p.file)}</td><td>${esc(p.name)}</td><td>${esc(deptName(p.department))}</td><td>${esc(p.phone||'—')}</td></tr>`).join('')||'<tr><td colspan="4" class="empty">ابدأ بإضافة ملف تجريبي</td></tr>';$('appointmentsTable').innerHTML=data.appointments.length?data.appointments.slice().sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)).map(a=>`<tr><td>${esc(a.patient)}</td><td>${esc(deptName(a.department))}</td><td>${esc(a.date)}</td><td>${esc(a.time)}</td><td>${esc(a.status)}</td></tr>`).join(''):'<tr><td colspan="5" class="empty">لا توجد مواعيد تجريبية</td></tr>'}
-function go(page){document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id==='page-'+page));document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('active',b.dataset.page===page));const btn=document.querySelector(`.nav[data-page="${page}"]`);$('pageTitle').textContent=btn?btn.textContent.trim():'مركز سند';$('sidebar').classList.remove('open')}
-document.querySelectorAll('.nav').forEach(b=>b.addEventListener('click',()=>go(b.dataset.page)));document.querySelectorAll('[data-goto]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.goto)));$('menuBtn').addEventListener('click',()=>$('sidebar').classList.toggle('open'));
-$('newPatientBtn').addEventListener('click',()=>{$('patientFormPanel').style.display='block'});$('cancelPatient').addEventListener('click',()=>{$('patientFormPanel').style.display='none';$('patientForm').reset()});$('patientForm').addEventListener('submit',e=>{e.preventDefault();const fd=new FormData(e.target);const n=(data.patients.length+1).toString().padStart(4,'0');data.patients.push({file:'SND-'+n,name:fd.get('name'),phone:fd.get('phone'),department:fd.get('department'),gender:fd.get('gender'),notes:fd.get('notes'),date:new Date().toLocaleDateString('ar-EG')});save();e.target.reset();$('patientFormPanel').style.display='none';go('patients')});$('patientSearch').addEventListener('input',render);$('patientFilter').addEventListener('change',render);
-$('newAppointmentBtn').addEventListener('click',()=>$('appointmentPanel').style.display='block');$('cancelAppointment').addEventListener('click',()=>{$('appointmentPanel').style.display='none';$('appointmentForm').reset()});$('appointmentForm').addEventListener('submit',e=>{e.preventDefault();const fd=new FormData(e.target);const item={patient:fd.get('patient'),department:fd.get('department'),date:fd.get('date'),time:fd.get('time'),status:fd.get('status')};if(data.appointments.some(a=>a.date===item.date&&a.time===item.time&&a.department===item.department&&a.status!=='أُلغي')){alert('يوجد موعد مسجل في نفس الوقت والقسم في هذه النسخة التجريبية.');return}data.appointments.push(item);save();e.target.reset();$('appointmentPanel').style.display='none'});
-$('exportPatients').addEventListener('click',()=>{const rows=[['رقم الملف','الاسم التجريبي','القسم','النوع','الهاتف','تاريخ الإضافة'],...data.patients.map(p=>[p.file,p.name,deptName(p.department),p.gender,p.phone||'',p.date])];const csv='\ufeff'+rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));const a=document.createElement('a');a.href=url;a.download='sanad-demo-patients.csv';a.click();URL.revokeObjectURL(url)});
-$('clearDemo').addEventListener('click',()=>{if(confirm('متأكد إنك عايز تمسح كل بيانات التجربة من هذا المتصفح؟')){data={patients:[],appointments:[]};save()}});render();
-</script></body></html>
+/* مفتاح Publishable عام مخصص للواجهة. لا تضع service_role أو secret key هنا. */
+const SUPABASE_URL = "https://doomtfpzylftjcjuzgxc.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_-AXFBEuxB_XpNvCv36doNQ_rONlw9DI";
+
+const departments = [
+"علاج طبيعي أطفال","تخاطب","علاج وظيفي","تكامل حسي",
+"علاج طبيعي كبار رجال","علاج طبيعي كبار سيدات","علاج مائي","تغذية علاجية"
+];
+
+let db = null;
+let currentUser = null;
+let patients = [];
+let appointments = [];
+
+const $ = id => document.getElementById(id);
+const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({
+  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+}[c]));
+const deptName = d => d || "غير محدد";
+const statusName = s => ({scheduled:"مجدول",completed:"مكتمل",cancelled:"ملغي"}[s] || s || "غير محدد");
+
+function message(text, error=false) {
+  $("message").textContent = text;
+  $("message").style.color = error ? "#b91c1c" : "#0f766e";
+}
+function loginMessage(text, error=false) {
+  $("loginMsg").textContent = text;
+  $("loginMsg").style.color = error ? "#b91c1c" : "#0f766e";
+}
+function initUI() {
+  $("pDepartment").innerHTML = departments.map(d=>`<option>${esc(d)}</option>`).join("");
+  $("departmentCards").innerHTML = departments.map(d=>`<div class="card"><h3>${esc(d)}</h3><span class="pill">قسم رئيسي</span></div>`).join("");
+  $("nav").addEventListener("click", e=>{
+    const b=e.target.closest("button[data-page]");
+    if(!b) return;
+    document.querySelectorAll("nav button").forEach(x=>x.classList.toggle("active",x===b));
+    document.querySelectorAll(".page").forEach(x=>x.classList.toggle("active",x.id===b.dataset.page));
+  });
+}
+function showForm(id, show=true) { $(id).classList.toggle("hidden",!show); }
+
+async function login() {
+  if (!db) return loginMessage("أضف مفتاح Publishable الصحيح في الكود أولًا.", true);
+  const email=$("email").value.trim(), password=$("password").value;
+  if(!email || !password) return loginMessage("اكتب البريد الإلكتروني وكلمة المرور.",true);
+  $("loginBtn").disabled=true;
+  loginMessage("جارٍ تسجيل الدخول...");
+  try {
+    const {error}=await db.auth.signInWithPassword({email,password});
+    if(error) throw error;
+    await checkProfileAndStart();
+  } catch(e) {
+    loginMessage("تعذر الدخول: "+e.message,true);
+  } finally { $("loginBtn").disabled=false; }
+}
+async function checkProfileAndStart() {
+  const {data:{user}}=await db.auth.getUser();
+  if(!user) throw new Error("لم يتم العثور على حساب المستخدم.");
+  const {data:profile,error}=await db.from("staff_profiles").select("id,full_name,role").eq("id",user.id).maybeSingle();
+  if(error) throw error;
+  if(!profile) {
+    await db.auth.signOut();
+    throw new Error("الحساب غير مضاف إلى staff_profiles. يجب على المدير إضافته أولًا.");
+  }
+  currentUser=user;
+  $("login").style.display="none";
+  $("app").style.display="block";
+  await loadData();
+}
+async function logout() {
+  if(db) await db.auth.signOut();
+  currentUser=null; patients=[]; appointments=[];
+  $("app").style.display="none"; $("login").style.display="block";
+  loginMessage("تم تسجيل الخروج.");
+}
+async function loadData() {
+  message("جارٍ تحميل البيانات...");
+  try {
+    const [p,a]=await Promise.all([
+      db.from("patients").select("id,full_name,phone,department,created_at"),
+      db.from("appointments").select("id,patient_id,appointment_at,status")
+    ]);
+    if(p.error) throw p.error;
+    if(a.error) throw a.error;
+    patients=p.data||[]; appointments=a.data||[];
+    renderAll(); message("تم تحميل البيانات بنجاح.");
+  } catch(e) {
+    message("تعذر تحميل البيانات: "+e.message,true);
+  }
+}
+function renderPatients() {
+  const q=$("patientSearch").value.trim().toLowerCase();
+  const rows=patients.filter(p=>(p.full_name||"").toLowerCase().includes(q)||(p.phone||"").includes(q));
+  $("patientRows").innerHTML=rows.map(p=>`<tr><td>${esc(p.full_name)}</td><td>${esc(p.phone||"—")}</td><td>${esc(deptName(p.department))}</td><td>${esc(p.created_at?new Date(p.created_at).toLocaleDateString("ar-EG"):"—")}</td></tr>`).join("") || `<tr><td colspan="4">لا توجد بيانات مطابقة.</td></tr>`;
+}
+function renderAppointments() {
+  const sorted=[...appointments].sort((x,y)=>new Date(x.appointment_at)-new Date(y.appointment_at));
+  $("appointmentRows").innerHTML=sorted.map(a=>{
+    const p=patients.find(x=>x.id===a.patient_id);
+    return `<tr><td>${esc(p?.full_name||"مريض غير معروف")}</td><td>${esc(a.appointment_at?new Date(a.appointment_at).toLocaleString("ar-EG"):"—")}</td><td>${esc(statusName(a.status))}</td></tr>`;
+  }).join("") || `<tr><td colspan="3">لا توجد مواعيد مسجلة.</td></tr>`;
+}
+function drawChart(id, entries) {
+  const max=Math.max(1,...entries.map(x=>x.value));
+  $(id).innerHTML=entries.map(x=>`<div class="barcol"><span class="barvalue">${x.value}</span><div class="bar" style="height:${Math.max(3,x.value/max*100)}%"></div><span class="barlabel">${esc(x.label)}</span></div>`).join("");
+}
+function renderDashboard() {
+  $("totalPatients").textContent=patients.length;
+  $("totalAppointments").textContent=appointments.length;
+  const today=new Date().toDateString();
+  $("todayAppointments").textContent=appointments.filter(a=>a.appointment_at&&new Date(a.appointment_at).toDateString()===today).length;
+  drawChart("departmentChart",departments.map(d=>({label:d.replace("علاج طبيعي ",""),value:patients.filter(p=>p.department===d).length})));
+  drawChart("appointmentChart",[
+    {label:"مجدول",value:appointments.filter(a=>a.status==="scheduled").length},
+    {label:"مكتمل",value:appointments.filter(a=>a.status==="completed").length},
+    {label:"ملغي",value:appointments.filter(a=>a.status==="cancelled").length}
+  ]);
+  const recent=[...patients].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).slice(0,5);
+  $("recentPatients").innerHTML=recent.map(p=>`<tr><td>${esc(p.full_name)}</td><td>${esc(deptName(p.department))}</td><td>${esc(p.created_at?new Date(p.created_at).toLocaleDateString("ar-EG"):"—")}</td></tr>`).join("")||`<tr><td colspan="3">لا يوجد مرضى مسجلون.</td></tr>`;
+}
+function renderAll() {
+  renderPatients(); renderAppointments(); renderDashboard();
+  $("aPatient").innerHTML=patients.map(p=>`<option value="${esc(p.id)}">${esc(p.full_name)}</option>`).join("");
+}
+async function addPatient() {
+  const full_name=$("pName").value.trim();
+  if(!full_name) return message("اسم المريض مطلوب.",true);
+  try {
+    const {error}=await db.from("patients").insert({
+      full_name, phone:$("pPhone").value.trim()||null,
+      department:$("pDepartment").value,
+      notes:$("pNotes").value.trim()||null,
+      created_by:currentUser.id
+    });
+    if(error) throw error;
+    $("pName").value=""; $("pPhone").value=""; $("pNotes").value="";
+    showForm("patientForm",false);
+    await loadData();
+    message("تم حفظ المريض.");
+  } catch(e) { message("تعذر حفظ المريض: "+e.message,true); }
+}
+async function addAppointment() {
+  const patient_id=$("aPatient").value, date=$("aDate").value;
+  if(!patient_id||!date) return message("اختر المريض والتاريخ والوقت.",true);
+  try {
+    const {error}=await db.from("appointments").insert({
+      patient_id, appointment_at:new Date(date).toISOString(),
+      status:$("aStatus").value, created_by:currentUser.id
+    });
+    if(error) throw error;
+    $("aDate").value=""; showForm("appointmentForm",false);
+    await loadData();
+    message("تم حفظ الموعد.");
+  } catch(e) { message("تعذر حفظ الموعد: "+e.message,true); }
+}
+
+initUI();
+if(SUPABASE_PUBLISHABLE_KEY.startsWith("sb_publishable_") && window.supabase) {
+  db=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+  db.auth.getSession().then(async ({data,error})=>{
+    if(error) return;
+    if(data.session) {
+      try { await checkProfileAndStart(); }
+      catch(e) { loginMessage(e.message,true); }
+    }
+  });
+}
+</script>
+</body>
+</html>
