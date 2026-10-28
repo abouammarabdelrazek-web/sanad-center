@@ -36,8 +36,8 @@ main{padding:22px;min-width:0}.page{display:none}.page.active{display:block}.gri
 <body>
 <section id="login">
   <div class="brand">سند | SANAD</div><h2>إدارة مركز سند للعلاج الطبيعي والتأهيل</h2>
-  <p class="muted">سجّل الدخول بحساب الموظف المسجّل في النظام.</p>
-  <div class="field"><label>البريد الإلكتروني</label><input id="email" type="email" autocomplete="username" placeholder="name@example.com"></div>
+  <p class="muted">سجّل الدخول باسم المستخدم وكلمة المرور المخصصين لك.</p>
+  <div class="field"><label>اسم المستخدم</label><input id="username" type="text" autocomplete="username" placeholder="مثال: ammar.pt" dir="ltr"></div>
   <div class="field"><label>كلمة المرور</label><input id="password" type="password" autocomplete="current-password" placeholder="كلمة المرور"></div>
   <button id="loginBtn" style="width:100%" onclick="login()">تسجيل الدخول</button><div id="loginMsg" role="status"></div>
 </section>
@@ -70,9 +70,14 @@ main{padding:22px;min-width:0}.page{display:none}.page.active{display:block}.gri
 <div class="tablewrap"><table><thead><tr><th>الاسم (اضغط لفتح الملف)</th><th>الهاتف</th><th>القسم</th><th>تاريخ التسجيل</th><th>إجراء</th></tr></thead><tbody id="patientRows"></tbody></table></div></div>
 </section>
 <section id="staffAdmin" class="page">
-<div class="sectionhead"><div><h1>الموظفون والصلاحيات</h1><p class="muted">إسناد دور الموظف وقسمه. إنشاء حساب الدخول نفسه يتم أولًا من Supabase Authentication.</p></div><button onclick="loadStaffAdmin()">تحديث القائمة</button></div>
-<div class="notice">الأدوار: admin = مدير المركز، receptionist = سكرتيرة، accountant = محاسب، department_manager = مدير فني للقسم، physiotherapist / therapist = معالج.</div>
-<div class="tablewrap"><table><thead><tr><th>الموظف</th><th>الدور</th><th>القسم</th><th>إجراء</th></tr></thead><tbody id="staffAdminRows"><tr><td colspan="4">افتح الصفحة لتحديث القائمة.</td></tr></tbody></table></div>
+<div class="sectionhead"><div><h1>الموظفون والصلاحيات</h1><p class="muted">إضافة حساب جديد باسم مستخدم وكلمة مرور، وتحديد دوره وقسمه.</p></div><button onclick="loadStaffAdmin()">تحديث القائمة</button></div>
+<div class="notice">الأدوار: admin = مدير المركز، receptionist = سكرتيرة، accountant = محاسب، department_manager = مدير فني للقسم، physiotherapist / therapist = معالج. اسم المستخدم بالإنجليزية من 3 إلى 30 حرفًا.</div>
+<div class="card" style="margin-bottom:16px"><h2>إضافة موظف جديد</h2>
+<div class="formgrid"><div class="field"><label>اسم الموظف *</label><input id="newStaffName" placeholder="الاسم بالكامل"></div><div class="field"><label>اسم المستخدم *</label><input id="newStaffUsername" dir="ltr" autocomplete="off" placeholder="مثال: sara.pt"></div>
+<div class="field"><label>كلمة المرور * (8 أحرف على الأقل)</label><input id="newStaffPassword" type="password" autocomplete="new-password" placeholder="كلمة مرور مؤقتة"></div><div class="field"><label>الدور *</label><select id="newStaffRole" onchange="toggleNewStaffDepartment()"><option value="receptionist">سكرتيرة</option><option value="accountant">محاسب</option><option value="department_manager">مدير فني للقسم</option><option value="physiotherapist">أخصائي علاج طبيعي</option><option value="therapist">معالج</option></select></div>
+<div class="field" id="newStaffDepartmentWrap"><label>القسم</label><select id="newStaffDepartment"><option value="">بدون قسم</option></select></div></div>
+<button id="createStaffBtn" onclick="createStaffAccount()">إنشاء حساب الموظف</button><span class="muted" style="margin-right:8px">سلّم الموظف اسم المستخدم وكلمة المرور بأمان.</span></div>
+<div class="tablewrap"><table><thead><tr><th>الموظف / اسم المستخدم</th><th>الدور</th><th>القسم</th><th>إجراء</th></tr></thead><tbody id="staffAdminRows"><tr><td colspan="4">افتح الصفحة لتحديث القائمة.</td></tr></tbody></table></div>
 </section>
 <section id="profile" class="page">
 <div class="sectionhead"><div><h1 id="profileTitle">ملف المريض</h1><p class="muted" id="profileSub"></p></div><div class="actions"><button class="secondary" onclick="goPage('patients')">العودة للمرضى</button><button onclick="editCurrentPatient()">تعديل البيانات الأساسية</button></div></div>
@@ -190,7 +195,7 @@ refreshDepartmentOptions();toggleSessionChartDate();toggleFinanceReportDate();
 function goPage(id){document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===id));document.querySelectorAll("main .page").forEach(p=>p.classList.toggle("active",p.id===id));}
 function showForm(id,show=true){$(id).classList.toggle("hidden",!show)}
 function resetPatientForm(){$("pId").value="";$("pName").value="";$("pPhone").value="";$("pNotes").value="";$("pDepartment").selectedIndex=0;$("patientFormTitle").textContent="بيانات المريض"}
-async function login(){if(!db)return loginMessage("تعذر الاتصال بخدمة قاعدة البيانات.",true);const email=$("email").value.trim(),password=$("password").value;if(!email||!password)return loginMessage("اكتب البريد الإلكتروني وكلمة المرور.",true);$("loginBtn").disabled=true;loginMessage("جارٍ تسجيل الدخول...");try{const {error}=await db.auth.signInWithPassword({email,password});if(error)throw error;await checkProfileAndStart()}catch(e){loginMessage("تعذر الدخول: "+e.message,true)}finally{$("loginBtn").disabled=false}}
+async function login(){if(!db)return loginMessage("تعذر الاتصال بخدمة قاعدة البيانات.",true);const username=$("username").value.trim().toLowerCase(),password=$("password").value;if(!username||!password)return loginMessage("اكتب اسم المستخدم وكلمة المرور.",true);$("loginBtn").disabled=true;loginMessage("جارٍ تسجيل الدخول...");try{const {data,error}=await db.functions.invoke("dynamic-handler",{body:{action:"login",username,password}});if(error)throw error; if(data?.error)throw new Error(data.error);if(!data?.session?.access_token||!data?.session?.refresh_token)throw new Error("لم تصل جلسة الدخول من الخادم.");const {error:sessionError}=await db.auth.setSession({access_token:data.session.access_token,refresh_token:data.session.refresh_token});if(sessionError)throw sessionError;await checkProfileAndStart()}catch(e){loginMessage("تعذر الدخول: "+(e.message||"راجع اسم المستخدم وكلمة المرور وإعدادات تسجيل الدخول."),true)}finally{$("loginBtn").disabled=false}}
 async function checkProfileAndStart(){const {data:{user}}=await db.auth.getUser();if(!user)throw new Error("لم يتم العثور على حساب المستخدم.");const {data:profile,error}=await db.from("staff_profiles").select("id,full_name,role,department").eq("id",user.id).maybeSingle();if(error)throw error;if(!profile){await db.auth.signOut();throw new Error("الحساب غير مضاف إلى staff_profiles.");}currentUser=user;currentRole=profile.role||"";currentDepartment=profile.department||null;applyRolePermissions();$("login").style.display="none";$("app").style.display="block";await loadData();await loadTherapists();if(currentRole==="admin")await loadStaffAdmin();}
 async function logout(){if(db)await db.auth.signOut();currentUser=null;currentRole="";currentDepartment=null;patients=[];appointments=[];currentPatient=null;$("app").style.display="none";$("login").style.display="block";loginMessage("تم تسجيل الخروج.")}
 async function loadData(){message("جارٍ تحميل البيانات...");try{const [p,a]=await Promise.all([db.from("patients").select("id,full_name,phone,department,notes,created_at"),db.from("appointments").select("id,patient_id,appointment_at,status,therapist_id,department")]);if(p.error)throw p.error;if(a.error)throw a.error;patients=p.data||[];appointments=a.data||[];refreshDepartmentOptions();renderAll();const pkgOk=await loadPackages();const expOk=await loadExpenses();await loadFinancialReportData();if(!pkgOk)message("المرضى والمواعيد تم تحميلهم، لكن الباقات لم تُحمّل. شغّل ملف تحديث قاعدة البيانات أولًا.",true);else if(["admin","accountant"].includes(currentRole)&&!expOk)message("تم تحميل البيانات، لكن تعذّر تحميل المصروفات. راجع تحديث قاعدة البيانات والصلاحيات.",true);else message("تم تحميل البيانات بنجاح.")}catch(e){message("تعذر تحميل البيانات: "+e.message,true)}}
@@ -284,15 +289,27 @@ async function addFinancialEntry(){if(!currentPatient)return;const amount=Number
 function renderFinance(){let balance=0;const sign={charge:1,payment:-1,discount:-1,refund:1};financeRows.forEach(f=>balance+=(Number(f.amount)||0)*(sign[f.entry_type]??0));$("financialBalance").textContent=balance.toLocaleString("ar-EG",{minimumFractionDigits:2,maximumFractionDigits:2})+" ج.م";$("financeRows").innerHTML=financeRows.map(f=>`<tr><td>${esc(f.created_at?new Date(f.created_at).toLocaleDateString("ar-EG"):"—")}</td><td>${esc(moneyName(f.entry_type))}</td><td>${esc(Number(f.amount||0).toLocaleString("ar-EG"))} ج.م</td><td>${esc(f.description||"—")}</td></tr>`).join("")||'<tr><td colspan="4">لا توجد حركات مالية.</td></tr>'}
 function renderPatientAppointments(){const rows=appointments.filter(a=>a.patient_id===currentPatient.id).sort((a,b)=>new Date(a.appointment_at)-new Date(b.appointment_at));$("profileAppointmentRows").innerHTML=rows.map(a=>`<tr><td>${esc(a.appointment_at?new Date(a.appointment_at).toLocaleString("ar-EG"):"—")}</td><td>${esc(statusName(a.status))}</td></tr>`).join("")||'<tr><td colspan="2">لا توجد مواعيد لهذا المريض.</td></tr>'}
 
+function toggleNewStaffDepartment(){const role=$("newStaffRole")?.value;const wrap=$("newStaffDepartmentWrap");if(wrap)wrap.style.display=["department_manager","physiotherapist","therapist"].includes(role)?"":"none"}
+async function createStaffAccount(){
+ if(currentRole!=="admin")return message("إضافة الموظفين متاحة لمدير المركز فقط.",true);
+ const full_name=$("newStaffName").value.trim(),username=$("newStaffUsername").value.trim().toLowerCase(),password=$("newStaffPassword").value,role=$("newStaffRole").value,department=$("newStaffDepartment").value||null;
+ if(!full_name||!username||!password)return message("أكمل اسم الموظف واسم المستخدم وكلمة المرور.",true);
+ if(!/^[a-z0-9_]{3,30}$/.test(username))return message("اسم المستخدم من 3 إلى 30 حرفًا إنجليزيًا صغيرًا أو رقمًا أو _.",true);
+ if(password.length<8)return message("كلمة المرور يجب أن تكون 8 أحرف على الأقل.",true);
+ if(["department_manager","physiotherapist","therapist"].includes(role)&&!department)return message("اختَر القسم لهذا الموظف.",true);
+ const btn=$("createStaffBtn");btn.disabled=true;btn.textContent="جارٍ إنشاء الحساب...";
+ try{const {data,error}=await db.functions.invoke("dynamic-handler",{body:{action:"create_staff",full_name,username,password,role,department}});if(error)throw error;if(data?.error)throw new Error(data.error);$("newStaffName").value="";$("newStaffUsername").value="";$("newStaffPassword").value="";message(`تم إنشاء حساب ${full_name} بنجاح. اسم المستخدم: ${username}`);await loadStaffAdmin();await loadTherapists()}catch(e){message("تعذر إنشاء الموظف: "+(e.message||"تحقق من نشر وظيفة dynamic-handler وتحديث قاعدة البيانات."),true)}finally{btn.disabled=false;btn.textContent="إنشاء حساب الموظف"}
+}
 async function loadStaffAdmin(){
  if(currentRole!=="admin")return;
  const body=$("staffAdminRows");if(!body)return;
  body.innerHTML='<tr><td colspan="4">جارٍ تحميل الموظفين...</td></tr>';
  try{
-  const {data,error}=await db.from("staff_profiles").select("id,full_name,role,department,created_at").order("created_at");
+  const {data,error}=await db.from("staff_profiles").select("id,username,full_name,role,department,created_at").order("created_at");
   if(error)throw error;
   const roles=[ ["admin","مدير المركز"],["receptionist","سكرتيرة"],["accountant","محاسب"],["department_manager","مدير فني للقسم"],["physiotherapist","أخصائي علاج طبيعي"],["therapist","معالج"] ];
-  body.innerHTML=(data||[]).map(x=>`<tr><td>${esc(x.full_name)}<div class="muted small">${esc(x.id)}</div></td><td><select id="staffRole_${x.id}">${roles.map(r=>`<option value="${r[0]}" ${x.role===r[0]?"selected":""}>${r[1]}</option>`).join("")}</select></td><td><select id="staffDept_${x.id}"><option value="">بدون قسم</option>${departments.map(d=>`<option value="${esc(d)}" ${x.department===d?"selected":""}>${esc(d)}</option>`).join("")}</select></td><td><button onclick="saveStaffProfile('${x.id}')" ${x.id===currentUser.id?'disabled title="لا تغيّر صلاحية حسابك من هذه الشاشة"':''}>حفظ</button></td></tr>`).join("")||'<tr><td colspan="4">لا توجد ملفات موظفين.</td></tr>';
+  body.innerHTML=(data||[]).map(x=>`<tr><td>${esc(x.full_name)}<div class="muted small">اسم المستخدم: ${esc(x.username||"غير محدد")}</div></td><td><select id="staffRole_${x.id}">${roles.map(r=>`<option value="${r[0]}" ${x.role===r[0]?"selected":""}>${r[1]}</option>`).join("")}</select></td><td><select id="staffDept_${x.id}"><option value="">بدون قسم</option>${departments.map(d=>`<option value="${esc(d)}" ${x.department===d?"selected":""}>${esc(d)}</option>`).join("")}</select></td><td><button onclick="saveStaffProfile('${x.id}')" ${x.id===currentUser.id?'disabled title="لا تغيّر صلاحية حسابك من هذه الشاشة"':''}>حفظ</button></td></tr>`).join("")||'<tr><td colspan="4">لا توجد ملفات موظفين.</td></tr>';
+  const deptSelect=$("newStaffDepartment");if(deptSelect)deptSelect.innerHTML='<option value="">اختَر القسم</option>'+departments.map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join("");toggleNewStaffDepartment();
  }catch(e){body.innerHTML=`<tr><td colspan="4">تعذر تحميل الموظفين: ${esc(e.message)}</td></tr>`}
 }
 async function saveStaffProfile(id){
