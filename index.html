@@ -98,16 +98,28 @@
     $('stats').innerHTML=items.join('');
   }
   async function showPage(page){
-    if(!visibleMenu().some(x=>x[0]===page)) page='overview';state.page=page;renderNav();await fetchStats();
-    if(page==='overview') return overviewPage();
-    if(page==='departments') return departmentsPage();
-    if(page==='patients') return patientsPage();
-    if(page==='appointments') return appointmentsPage();
-    if(page==='finances') return financesPage();
+    if(!visibleMenu().some(x=>x[0]===page)) page='overview';
+    state.page=page;
+    renderNav();
+    // Render the selected section immediately; a slow statistics request must not
+    // make the navigation appear unresponsive on mobile connections.
+    try {
+      if(page==='overview') overviewPage();
+      else if(page==='departments') departmentsPage();
+      else if(page==='patients') await patientsPage();
+      else if(page==='appointments') await appointmentsPage();
+      else if(page==='finances') await financesPage();
+      else overviewPage();
+    } catch (err) {
+      setPage('حدث خطأ', `<div class="notice error">تعذر فتح القسم: ${esc(err?.message || 'خطأ غير معروف')}</div><button class="btn secondary" id="retrySectionBtn" type="button">إعادة المحاولة</button>`);
+      $('retrySectionBtn')?.addEventListener('click', () => showPage(page));
+    }
+    fetchStats().catch(err => console.error('Stats loading failed:', err));
   }
   function overviewPage(){
     const depts=state.departments.filter(d=>state.profile.role!=='technical_manager'||d.id===state.profile.department_id);
-    setPage('نظرة عامة',`<p class="muted" style="margin-top:0">مرحبًا بك في نظام إدارة مركز سند. اختر الوظيفة المطلوبة من القائمة.</p><div class="dept-grid">${depts.map(d=>`<div class="dept"><h4>${esc(d.name)}</h4><p>قسم ضمن مركز سند</p></div>`).join('')}</div><div class="notice success" style="margin-top:16px">تم التحقق من تسجيل الدخول وقراءة صلاحيات الموظف.</div>`);
+    setPage('نظرة عامة',`<p class="muted" style="margin-top:0">مرحبًا بك في نظام إدارة مركز سند. اختر الوظيفة المطلوبة من القائمة أو اضغط على أحد الأقسام.</p><div class="dept-grid">${depts.map(d=>`<button class="dept dept-open" data-department="${esc(d.id)}" type="button" style="text-align:right;cursor:pointer;color:inherit"><h4>${esc(d.name)}</h4><p>اضغط لعرض الأقسام</p></button>`).join('')}</div><div class="notice success" style="margin-top:16px">تم التحقق من تسجيل الدخول وقراءة صلاحيات الموظف.</div>`);
+    $('sectionBody').querySelectorAll('[data-department]').forEach(b=>b.addEventListener('click',()=>showPage('departments')));
   }
   function departmentsPage(){
     const depts=state.departments.filter(d=>state.profile.role!=='technical_manager'||d.id===state.profile.department_id);
