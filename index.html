@@ -40,7 +40,7 @@
   const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_u6mAjtA5nkFWfc47AeKfDw_6_3Kj_u2';
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
   const $ = id => document.getElementById(id);
-  const state = {user:null, profile:null, departments:[], page:'overview', patients:[], appointments:[], finances:[]};
+  const state = {user:null, profile:null, departments:[], page:'overview', patients:[], appointments:[], finances:[], selectedDepartment:null, financeOffset:0, financeHasMore:false};
   const roleNames = {admin:'مدير إداري', secretary:'سكرتارية', accountant:'محاسب', technical_manager:'مدير فني'};
   const deptFallback = [
     ['pediatric_pt','العلاج الطبيعي للأطفال'],['sensory_skills','المهارات والتكامل الحسي'],['occupational_therapy','العلاج الوظيفي'],['therapeutic_nutrition','التغذية العلاجية'],['adult_male_pt','العلاج الطبيعي للكبار - رجال'],['adult_female_pt','العلاج الطبيعي للكبار - سيدات'],['hydrotherapy','العلاج المائي']
@@ -81,7 +81,7 @@
   }
   function renderNav(){
     $('sidebar').innerHTML=visibleMenu().map(([id,icon,label])=>`<button class="navbtn ${state.page===id?'active':''}" data-page="${id}" type="button"><span class="navicon">${icon}</span><span>${label}</span></button>`).join('');
-    $('sidebar').querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>showPage(b.dataset.page)));
+    $('sidebar').querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.page==='departments')state.selectedDepartment=null;showPage(b.dataset.page);}));
   }
   function setPage(title,body,actions=''){ $('sectionTitle').textContent=title;$('sectionBody').innerHTML=body;$('sectionActions').innerHTML=actions; }
   function stat(label,value,sub=''){return `<div class="stat"><div class="label">${label}</div><div class="value">${value}</div><div class="sub">${sub}</div></div>`;}
@@ -105,7 +105,7 @@
     // make the navigation appear unresponsive on mobile connections.
     try {
       if(page==='overview') overviewPage();
-      else if(page==='departments') departmentsPage();
+      else if(page==='departments') await departmentsPage();
       else if(page==='patients') await patientsPage();
       else if(page==='appointments') await appointmentsPage();
       else if(page==='finances') await financesPage();
@@ -119,11 +119,28 @@
   function overviewPage(){
     const depts=state.departments.filter(d=>state.profile.role!=='technical_manager'||d.id===state.profile.department_id);
     setPage('نظرة عامة',`<p class="muted" style="margin-top:0">مرحبًا بك في نظام إدارة مركز سند. اختر الوظيفة المطلوبة من القائمة أو اضغط على أحد الأقسام.</p><div class="dept-grid">${depts.map(d=>`<button class="dept dept-open" data-department="${esc(d.id)}" type="button" style="text-align:right;cursor:pointer;color:inherit"><h4>${esc(d.name)}</h4><p>اضغط لعرض الأقسام</p></button>`).join('')}</div><div class="notice success" style="margin-top:16px">تم التحقق من تسجيل الدخول وقراءة صلاحيات الموظف.</div>`);
-    $('sectionBody').querySelectorAll('[data-department]').forEach(b=>b.addEventListener('click',()=>showPage('departments')));
+    $('sectionBody').querySelectorAll('[data-department]').forEach(b=>b.addEventListener('click',()=>{state.selectedDepartment=b.dataset.department;showPage('departments');}));
   }
-  function departmentsPage(){
+  async function departmentsPage(){
     const depts=state.departments.filter(d=>state.profile.role!=='technical_manager'||d.id===state.profile.department_id);
-    setPage('الأقسام',`<div class="dept-grid">${depts.map(d=>`<div class="dept"><h4>${esc(d.name)}</h4><p>معرّف القسم: ${esc(d.id)}</p></div>`).join('')}</div>`);
+    const selected=depts.find(d=>d.id===state.selectedDepartment);
+    if(!selected){
+      setPage('الأقسام',`<p class="muted" style="margin-top:0">اختر القسم لعرض المرضى المسجلين فيه.</p><div class="dept-grid">${depts.map(d=>`<button class="dept dept-open" data-department="${esc(d.id)}" type="button" style="text-align:right;cursor:pointer;color:inherit"><h4>${esc(d.name)}</h4><p>اضغط لعرض مرضى القسم</p></button>`).join('')}</div>`);
+      $('sectionBody').querySelectorAll('[data-department]').forEach(b=>b.addEventListener('click',()=>{state.selectedDepartment=b.dataset.department;departmentsPage();}));
+      return;
+    }
+    setPage(selected.name,'<div class="empty">جارٍ تحميل مرضى القسم…</div>',`<button class="btn secondary" id="backDepartments" type="button">رجوع للأقسام</button>${isRole('admin','secretary')?'<button class="btn" id="addDeptPatient" type="button">+ إضافة مريض للقسم</button>':''}`);
+    $('backDepartments')?.addEventListener('click',()=>{state.selectedDepartment=null;departmentsPage();});
+    $('addDeptPatient')?.addEventListener('click',()=>patientForm(selected.id));
+    let q=sb.from('patients').select('id,file_number,full_name,phone,sex,department_id,is_active,created_at').eq('department_id',selected.id).order('created_at',{ascending:false}).limit(500);
+    if(state.profile.role==='technical_manager'&&state.profile.department_id)q=q.eq('department_id',state.profile.department_id);
+    const {data,error}=await q;
+    if(error){$('sectionBody').innerHTML=`<div class="notice error">تعذر تحميل مرضى القسم: ${esc(error.message)}</div>`;return;}
+    const rows=data||[];
+    $('sectionBody').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>رقم الملف</th><th>اسم المريض</th><th>الهاتف</th><th>النوع</th><th>الحالة</th></tr></thead><tbody>${rows.map(p=>`<tr><td>${esc(p.file_number??p.id)}</td><td>${esc(p.full_name)}</td><td>${esc(p.phone||'—')}</td><td>${esc(p.sex||'—')}</td><td><span class="badge">${p.is_active===false?'غير نشط':'نشط'}</span></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا يوجد مرضى مسجلون في هذا القسم حتى الآن.</div>';
+    $('sectionActions').innerHTML=`<button class="btn secondary" id="backDepartments" type="button">رجوع للأقسام</button>${isRole('admin','secretary')?'<button class="btn" id="addDeptPatient" type="button">+ إضافة مريض للقسم</button>':''}`;
+    $('backDepartments')?.addEventListener('click',()=>{state.selectedDepartment=null;departmentsPage();});
+    $('addDeptPatient')?.addEventListener('click',()=>patientForm(selected.id));
   }
   async function patientsPage(){
     setPage('ملفات المرضى','<div class="empty">جارٍ تحميل المرضى…</div>','<button class="btn" id="addPatientBtn" type="button">+ إضافة مريض</button>');
@@ -137,38 +154,56 @@
     $('sectionActions').innerHTML='<button class="btn" id="addPatientBtn" type="button">+ إضافة مريض</button>';$('addPatientBtn').addEventListener('click',patientForm);
   }
   function deptName(id){return state.departments.find(d=>d.id===id)?.name||'—';}
-  function patientForm(){
+  function patientForm(defaultDepartmentId=null){
     const depts=state.departments.filter(d=>state.profile.role!=='technical_manager'||d.id===state.profile.department_id);
-    $('sectionBody').innerHTML=`<form id="patientForm"><div class="form-grid"><div class="field"><label>اسم المريض *</label><input name="full_name" required maxlength="160"></div><div class="field"><label>رقم الهاتف</label><input name="phone" inputmode="tel" maxlength="30"></div><div class="field"><label>النوع</label><select name="sex"><option value="">اختر</option><option value="male">ذكر</option><option value="female">أنثى</option></select></div><div class="field"><label>القسم الأساسي *</label><select name="department_id" required>${depts.map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label>تاريخ الميلاد</label><input name="date_of_birth" type="date"></div><div class="field"><label>اسم ولي الأمر</label><input name="guardian_name" maxlength="160"></div><div class="field span-2"><label>العنوان</label><input name="address" maxlength="250"></div><div class="field span-2"><label>ملاحظات</label><textarea name="notes"></textarea></div></div><div class="toolbar"><button class="btn" type="submit">حفظ المريض</button><button class="btn ghost" id="cancelPatient" type="button">إلغاء</button></div><div id="patientMessage"></div></form>`;
+    $('sectionBody').innerHTML=`<form id="patientForm"><div class="form-grid"><div class="field"><label>اسم المريض *</label><input name="full_name" required maxlength="160"></div><div class="field"><label>رقم الهاتف</label><input name="phone" inputmode="tel" maxlength="30"></div><div class="field"><label>النوع</label><select name="sex"><option value="">اختر</option><option value="male">ذكر</option><option value="female">أنثى</option></select></div><div class="field"><label>القسم الأساسي *</label><select name="department_id" required>${depts.map(d=>`<option value="${esc(d.id)}" ${d.id===(defaultDepartmentId||state.profile.department_id)?'selected':''}>${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label>تاريخ الميلاد</label><input name="date_of_birth" type="date"></div><div class="field"><label>اسم ولي الأمر</label><input name="guardian_name" maxlength="160"></div><div class="field span-2"><label>العنوان</label><input name="address" maxlength="250"></div><div class="field span-2"><label>ملاحظات</label><textarea name="notes"></textarea></div></div><div class="toolbar"><button class="btn" type="submit">حفظ المريض</button><button class="btn ghost" id="cancelPatient" type="button">إلغاء</button></div><div id="patientMessage"></div></form>`;
     $('cancelPatient').addEventListener('click',patientsPage);
     $('patientForm').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.currentTarget);const payload={full_name:f.get('full_name').trim(),phone:f.get('phone')||null,sex:f.get('sex')||null,department_id:f.get('department_id'),date_of_birth:f.get('date_of_birth')||null,guardian_name:f.get('guardian_name')||null,address:f.get('address')||null,notes:f.get('notes')||null,created_by:state.user.id};
-      const btn=e.currentTarget.querySelector('button[type=submit]');btn.disabled=true;const {error}=await sb.from('patients').insert(payload);btn.disabled=false;if(error){msg($('patientMessage'),'لم يتم الحفظ: '+error.message);return;}msg($('patientMessage'),'تم حفظ ملف المريض بنجاح.','success');setTimeout(patientsPage,700);
+      const btn=e.currentTarget.querySelector('button[type=submit]');btn.disabled=true;const {error}=await sb.from('patients').insert(payload);btn.disabled=false;if(error){msg($('patientMessage'),'لم يتم الحفظ: '+error.message);return;}msg($('patientMessage'),'تم حفظ ملف المريض بنجاح.','success');setTimeout(()=>{if(defaultDepartmentId){state.selectedDepartment=defaultDepartmentId;departmentsPage();}else patientsPage();},700);
     });
   }
   async function appointmentsPage(){
-    setPage('المواعيد والجلسات','<div class="empty">جارٍ تحميل المواعيد…</div>','<button class="btn" id="addApptBtn" type="button">+ إضافة موعد</button>');$('addApptBtn')?.addEventListener('click',appointmentForm);
-    let q=sb.from('appointments').select('id,patient_id,department_id,appointment_at,duration_minutes,status,notes,patients(full_name)').order('appointment_at',{ascending:true}).limit(150);
+    setPage('المواعيد والجلسات','<div class="empty">جارٍ تحميل المواعيد…</div>','<button class="btn" id="addApptBtn" type="button">+ إضافة موعد</button>');$('addApptBtn')?.addEventListener('click',()=>appointmentForm());
+    let q=sb.from('appointments').select('id,patient_id,department_id,appointment_at,duration_minutes,status,notes,patients(full_name)').order('appointment_at',{ascending:true}).limit(500);
     if(state.profile.role==='technical_manager'&&state.profile.department_id)q=q.eq('department_id',state.profile.department_id);
     const {data,error}=await q;if(error){$('sectionBody').innerHTML=`<div class="notice error">تعذر تحميل المواعيد: ${esc(error.message)}</div>`;return;}
-    state.appointments=data||[];$('sectionBody').innerHTML=state.appointments.length?`<div class="table-wrap"><table><thead><tr><th>التاريخ والوقت</th><th>المريض</th><th>القسم</th><th>المدة</th><th>الحالة</th></tr></thead><tbody>${state.appointments.map(a=>`<tr><td>${dateTime(a.appointment_at)}</td><td>${esc(a.patients?.full_name||'—')}</td><td>${esc(deptName(a.department_id))}</td><td>${esc(a.duration_minutes??45)} دقيقة</td><td><span class="badge ${a.status==='cancelled'?'cancelled':a.status==='pending'?'pending':''}">${esc(statusName(a.status))}</span></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد مواعيد مسجلة.</div>';
-    $('sectionActions').innerHTML='<button class="btn" id="addApptBtn" type="button">+ إضافة موعد</button>';$('addApptBtn').addEventListener('click',appointmentForm);
+    state.appointments=data||[];
+    $('sectionBody').innerHTML=state.appointments.length?`<div class="table-wrap"><table><thead><tr><th>التاريخ والوقت</th><th>المريض</th><th>القسم</th><th>المدة</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody>${state.appointments.map(a=>`<tr><td>${dateTime(a.appointment_at)}</td><td>${esc(a.patients?.full_name||'—')}</td><td>${esc(deptName(a.department_id))}</td><td>${esc(a.duration_minutes??45)} دقيقة</td><td><span class="badge ${a.status==='cancelled'?'cancelled':a.status==='pending'?'pending':''}">${esc(statusName(a.status))}</span></td><td><div class="toolbar"><button class="btn secondary" data-edit-appt="${esc(a.id)}" type="button">تعديل</button>${a.status!=='cancelled'?`<button class="btn danger" data-cancel-appt="${esc(a.id)}" type="button">إلغاء الموعد</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد مواعيد مسجلة.</div>';
+    $('sectionBody').querySelectorAll('[data-edit-appt]').forEach(b=>b.addEventListener('click',()=>appointmentForm(b.dataset.editAppt)));
+    $('sectionBody').querySelectorAll('[data-cancel-appt]').forEach(b=>b.addEventListener('click',()=>cancelAppointment(b.dataset.cancelAppt)));
+    $('sectionActions').innerHTML='<button class="btn" id="addApptBtn" type="button">+ إضافة موعد</button>';$('addApptBtn').addEventListener('click',()=>appointmentForm());
+  }
+  async function cancelAppointment(id){
+    if(!confirm('هل تريد إلغاء هذا الموعد؟'))return;
+    const {error}=await sb.from('appointments').update({status:'cancelled'}).eq('id',id);
+    if(error){alert('تعذر إلغاء الموعد: '+error.message);return;}
+    await appointmentsPage();
   }
   function statusName(s){return ({scheduled:'مجدول',confirmed:'مؤكد',completed:'تم',cancelled:'ملغي',pending:'قيد الانتظار',no_show:'لم يحضر'})[s]||s||'مجدول';}
-  async function appointmentForm(){
-    const [pRes]=await Promise.all([sb.from('patients').select('id,full_name,department_id').eq('is_active',true).order('full_name').limit(500)]);
+  async function appointmentForm(editId=null){
+    let existing=null;
+    if(editId){const {data,error}=await sb.from('appointments').select('id,patient_id,department_id,appointment_at,duration_minutes,status,notes').eq('id',editId).maybeSingle();if(error||!data){setPage('تعديل الموعد',`<div class="notice error">تعذر تحميل الموعد: ${esc(error?.message||'الموعد غير موجود')}</div>`);return;}existing=data;}
+    const pRes=await sb.from('patients').select('id,full_name,department_id').eq('is_active',true).order('full_name').limit(1000);
     if(pRes.error){setPage('إضافة موعد',`<div class="notice error">تعذر تحميل قائمة المرضى: ${esc(pRes.error.message)}</div>`);return;}
     let patients=pRes.data||[];if(state.profile.role==='technical_manager'&&state.profile.department_id)patients=patients.filter(p=>p.department_id===state.profile.department_id);
     const depts=state.departments.filter(d=>state.profile.role!=='technical_manager'||d.id===state.profile.department_id);
-    setPage('إضافة موعد',`<form id="apptForm"><div class="form-grid"><div class="field span-2"><label>المريض *</label><select name="patient_id" required><option value="">اختر المريض</option>${patients.map(p=>`<option value="${esc(p.id)}">${esc(p.full_name)}</option>`).join('')}</select></div><div class="field"><label>القسم *</label><select name="department_id" required>${depts.map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label>التاريخ والوقت *</label><input name="appointment_at" type="datetime-local" required></div><div class="field"><label>المدة بالدقائق</label><input name="duration" type="number" min="5" max="300" value="45"></div><div class="field"><label>الحالة</label><select name="status"><option value="scheduled">مجدول</option><option value="confirmed">مؤكد</option><option value="completed">تم</option><option value="cancelled">ملغي</option><option value="no_show">لم يحضر</option></select></div><div class="field span-2"><label>ملاحظات</label><textarea name="notes"></textarea></div></div><div class="toolbar"><button class="btn" type="submit">حفظ الموعد</button><button class="btn ghost" id="cancelAppt" type="button">إلغاء</button></div><div id="apptMessage"></div></form>`);
+    const localDate=existing?new Date(new Date(existing.appointment_at).getTime()-new Date(existing.appointment_at).getTimezoneOffset()*60000).toISOString().slice(0,16):'';
+    setPage(editId?'تعديل الموعد':'إضافة موعد',`<form id="apptForm"><div class="form-grid"><div class="field span-2"><label>المريض *</label><select name="patient_id" required><option value="">اختر المريض</option>${patients.map(p=>`<option value="${esc(p.id)}" ${p.id===existing?.patient_id?'selected':''}>${esc(p.full_name)}</option>`).join('')}</select></div><div class="field"><label>القسم *</label><select name="department_id" required>${depts.map(d=>`<option value="${esc(d.id)}" ${d.id===(existing?.department_id||state.profile.department_id)?'selected':''}>${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label>التاريخ والوقت *</label><input name="appointment_at" type="datetime-local" value="${esc(localDate)}" required></div><div class="field"><label>المدة بالدقائق</label><input name="duration" type="number" min="5" max="300" value="${esc(existing?.duration_minutes??45)}"></div><div class="field"><label>الحالة</label><select name="status">${[['scheduled','مجدول'],['confirmed','مؤكد'],['completed','تم'],['cancelled','ملغي'],['no_show','لم يحضر']].map(([v,l])=>`<option value="${v}" ${(existing?.status||'scheduled')===v?'selected':''}>${l}</option>`).join('')}</select></div><div class="field span-2"><label>ملاحظات</label><textarea name="notes">${esc(existing?.notes||'')}</textarea></div></div><div class="toolbar"><button class="btn" type="submit">${editId?'حفظ التعديلات':'حفظ الموعد'}</button><button class="btn ghost" id="cancelAppt" type="button">رجوع</button></div><div id="apptMessage"></div></form>`);
     $('cancelAppt').addEventListener('click',appointmentsPage);
-    $('apptForm').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.currentTarget);const payload={patient_id:f.get('patient_id'),department_id:f.get('department_id'),appointment_at:new Date(f.get('appointment_at')).toISOString(),duration_minutes:Number(f.get('duration')||45),status:f.get('status'),notes:f.get('notes')||null,created_by:state.user.id};const btn=e.currentTarget.querySelector('button[type=submit]');btn.disabled=true;const {error}=await sb.from('appointments').insert(payload);btn.disabled=false;if(error){msg($('apptMessage'),'لم يتم الحفظ: '+error.message);return;}msg($('apptMessage'),'تم تسجيل الموعد.','success');setTimeout(appointmentsPage,700);});
+    $('apptForm').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.currentTarget);const payload={patient_id:f.get('patient_id'),department_id:f.get('department_id'),appointment_at:new Date(f.get('appointment_at')).toISOString(),duration_minutes:Number(f.get('duration')||45),status:f.get('status'),notes:f.get('notes')||null};if(!editId)payload.created_by=state.user.id;const btn=e.currentTarget.querySelector('button[type=submit]');btn.disabled=true;const result=editId?await sb.from('appointments').update(payload).eq('id',editId):await sb.from('appointments').insert(payload);btn.disabled=false;if(result.error){msg($('apptMessage'),'لم يتم الحفظ: '+result.error.message);return;}msg($('apptMessage'),editId?'تم تحديث الموعد بنجاح.':'تم تسجيل الموعد.','success');setTimeout(appointmentsPage,700);});
   }
-  async function financesPage(){
+  async function financesPage(reset=true){
+    if(reset){state.finances=[];state.financeOffset=0;state.financeHasMore=true;}
     setPage('الإيرادات والمصروفات','<div class="empty">جارٍ تحميل السجلات المالية…</div>',isRole('admin','secretary','accountant')?'<button class="btn" id="addFinanceBtn" type="button">+ تسجيل حركة مالية</button>':'');$('addFinanceBtn')?.addEventListener('click',financeForm);
-    let q=sb.from('financial_entries').select('id,entry_type,amount,category,description,entry_date,payment_method,department_id').order('entry_date',{ascending:false}).limit(150);
+    const from=state.financeOffset,to=from+199;
+    let q=sb.from('financial_entries').select('id,entry_type,amount,category,description,entry_date,payment_method,department_id').order('entry_date',{ascending:false}).range(from,to);
     const {data,error}=await q;if(error){$('sectionBody').innerHTML=`<div class="notice error">تعذر تحميل السجلات المالية: ${esc(error.message)}</div>`;return;}
-    state.finances=data||[];const inc=state.finances.filter(x=>x.entry_type==='income').reduce((s,x)=>s+Number(x.amount||0),0),out=state.finances.filter(x=>x.entry_type==='expense').reduce((s,x)=>s+Number(x.amount||0),0);
-    $('sectionBody').innerHTML=`<div class="stats">${stat('إجمالي الإيرادات المعروضة',money(inc),'آخر 150 حركة')}${stat('إجمالي المصروفات المعروضة',money(out),'آخر 150 حركة')}</div>`+(state.finances.length?`<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>المبلغ</th><th>البند</th><th>القسم</th><th>طريقة الدفع</th><th>الوصف</th></tr></thead><tbody>${state.finances.map(x=>`<tr><td>${esc(x.entry_date)}</td><td><span class="badge ${x.entry_type==='expense'?'cancelled':''}">${x.entry_type==='income'?'إيراد':'مصروف'}</span></td><td>${money(x.amount)}</td><td>${esc(x.category||'—')}</td><td>${esc(deptName(x.department_id))}</td><td>${esc(x.payment_method||'—')}</td><td>${esc(x.description||'—')}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد حركات مالية مسجلة.</div>');
+    const batch=data||[];state.finances=reset?batch:state.finances.concat(batch);state.financeOffset=state.finances.length;state.financeHasMore=batch.length===200;renderFinancesTable();
+  }
+  function renderFinancesTable(){
+    const inc=state.finances.filter(x=>x.entry_type==='income').reduce((s,x)=>s+Number(x.amount||0),0),out=state.finances.filter(x=>x.entry_type==='expense').reduce((s,x)=>s+Number(x.amount||0),0);
+    $('sectionBody').innerHTML=`<div class="stats">${stat('إجمالي الإيرادات المحمّلة',money(inc),'عدد الحركات: '+state.finances.length)}${stat('إجمالي المصروفات المحمّلة',money(out),'عدد الحركات: '+state.finances.length)}</div>`+(state.finances.length?`<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>المبلغ</th><th>البند</th><th>القسم</th><th>طريقة الدفع</th><th>الوصف</th></tr></thead><tbody>${state.finances.map(x=>`<tr><td>${esc(x.entry_date)}</td><td><span class="badge ${x.entry_type==='expense'?'cancelled':''}">${x.entry_type==='income'?'إيراد':'مصروف'}</span></td><td>${money(x.amount)}</td><td>${esc(x.category||'—')}</td><td>${esc(deptName(x.department_id))}</td><td>${esc(x.payment_method||'—')}</td><td>${esc(x.description||'—')}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد حركات مالية مسجلة.</div>')+(state.financeHasMore?'<div style="margin-top:14px;text-align:center"><button class="btn secondary" id="loadMoreFinance" type="button">تحميل 200 حركة إضافية</button></div>':'<p class="muted small">تم تحميل كل الحركات المتاحة.</p>');
+    $('loadMoreFinance')?.addEventListener('click',()=>financesPage(false));
     if(isRole('admin','secretary','accountant')){$('sectionActions').innerHTML='<button class="btn" id="addFinanceBtn" type="button">+ تسجيل حركة مالية</button>';$('addFinanceBtn').addEventListener('click',financeForm);}
   }
   function financeForm(){
