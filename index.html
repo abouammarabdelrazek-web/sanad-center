@@ -137,6 +137,18 @@
   function allowedDepartments(){return ['technical_manager','therapist'].includes(state.profile?.role) ? state.departments.filter(d=>state.managerDepartments.includes(d.id)) : state.departments;}
   function departmentFilter(query){return ['technical_manager','therapist'].includes(state.profile?.role) ? query.in('department_id',state.managerDepartments) : query;}
   function staffName(id){return state.therapists.find(x=>x.id===id)?.full_name||state.staff.find(x=>x.user_id===id)?.full_name||(id&&id===state.user?.id?state.profile?.full_name:null)||'غير محدد';}
+  async function refreshCalendarTherapists(){
+    const [employeesResult,linksResult]=await Promise.all([
+      sb.from('sanad_employees').select('id,full_name,job_title,primary_department_id,is_active').eq('is_active',true).order('full_name'),
+      sb.from('sanad_employee_departments').select('employee_id,department_id')
+    ]);
+    if(employeesResult.error) throw new Error('تعذر تحميل ملفات الأطباء: '+employeesResult.error.message);
+    if(linksResult.error) throw new Error('تعذر تحميل أقسام الأطباء: '+linksResult.error.message);
+    const links=linksResult.data||[];
+    const provider=/طبيب|دكتور|أخصائي|اخصائي|اِخصائي|معالج|physio|therap|doctor|speech/i;
+    state.therapists=(employeesResult.data||[]).filter(e=>provider.test(String(e.job_title||'').normalize('NFC'))).map(e=>({...e,department_ids:[...new Set([...links.filter(l=>l.employee_id===e.id).map(l=>l.department_id),...(e.primary_department_id?[e.primary_department_id]:[])])]})).filter(e=>e.department_ids.length);
+    return state.therapists;
+  }
   async function loadDepartments(){
     const {data,error}=await sb.from('departments').select('id,name,default_duration_minutes,therapist_work_calculation').order('name');
     if(error) throw new Error('تعذر تحميل الأقسام: '+error.message);
@@ -384,6 +396,7 @@
   }
   async function appointmentsPage(){
     if(!isRole('admin','secretary','technical_manager','therapist')){setPage('المواعيد والجلسات','<div class="notice error">غير مصرح لك بفتح جداول المواعيد.</div>');return;}
+    try{await refreshCalendarTherapists();}catch(e){setPage('المواعيد والجلسات',`<div class="notice error">${esc(e.message)}</div>`);return;}
     const selectedDate=state.calendarDate||cairoDateString();
     const [yy,mm]=selectedDate.split('-').map(Number);
     const monthStart=`${yy}-${String(mm).padStart(2,'0')}-01`;
@@ -506,6 +519,7 @@
   function statusName(s){return ({scheduled:'مجدول',confirmed:'مؤكد',completed:'تم',cancelled:'ملغي',pending:'قيد الانتظار',no_show:'لم يحضر'})[s]||s||'مجدول';}
   async function appointmentForm(editId=null){
     if(!isRole('admin','secretary')){setPage('المواعيد','<div class="notice error">إضافة وتعديل المواعيد متاحان للمدير الإداري والسكرتارية فقط.</div>');return;}
+    try{await refreshCalendarTherapists();}catch(e){setPage('إضافة موعد',`<div class="notice error">${esc(e.message)}</div>`);return;}
     let existing=null;
     if(editId){const {data,error}=await sb.from('appointments').select('id,patient_id,department_id,therapist_id,appointment_at,duration_minutes,status,notes,appointment_type,package_id').eq('id',editId).maybeSingle();if(error||!data){setPage('تعديل الموعد',`<div class="notice error">تعذر تحميل الموعد: ${esc(error?.message||'الموعد غير موجود')}</div>`);return;}existing=data;}
     const pRes=await sb.from('patients').select('id,full_name,department_id').eq('is_active',true).order('full_name').limit(1000);
