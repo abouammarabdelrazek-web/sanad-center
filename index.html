@@ -555,13 +555,85 @@
       ]);
       if(setting.error||dept.error){$('durationHint').textContent='تعذر تحميل المدة الافتراضية؛ أدخلها يدويًا.';return;}
       const duration=setting.data?.duration_minutes??dept.data?.default_duration_minutes;
-      if(duration){$('apptForm').elements.duration.value=duration;$('durationHint').textContent='المدة المقترحة: '+duration+' دقيقة. يمكنك تعديلها لهذا الموعد.';}if(setting.data?.session_price!=null&&!existing)$('apptForm').elements.session_price.value=setting.data.session_price;
-      else{$('apptForm').elements.duration.value='';$('durationHint').textContent='لا توجد مدة افتراضية لهذا القسم/المريض. أدخل المدة يدويًا.';}
+      if(duration!=null&&duration!==''){
+        $('apptForm').elements.duration.value=duration;
+        $('durationHint').textContent='المدة المقترحة: '+duration+' دقيقة. يمكنك تعديلها لهذا الموعد.';
+      }else{
+        $('durationHint').textContent='لا توجد مدة افتراضية لهذا القسم/المريض. أدخل المدة يدويًا.';
+      }
+      if(setting.data?.session_price!=null&&!existing){
+        $('apptForm').elements.session_price.value=setting.data.session_price;
+      }
     };
     await refreshPackages();
     if(!existing) await refreshAppointmentDuration();
     if(existing?.package_id)$('appointmentPackage').value=existing.package_id;
-    $('apptForm').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.currentTarget);const type=f.get('appointment_type');const status=f.get('status');if(type==='therapy'&&status==='completed'){msg($('apptMessage'),'لا يتم اختيار مكتمل من نموذج الموعد؛ استخدم زر تأكيد الجلسة من الكلندر.');return;}const patientId=f.get('patient_id'),departmentId=f.get('department_id');const link=await sb.from('patient_departments').select('department_id').eq('patient_id',patientId).eq('department_id',departmentId).maybeSingle();if(link.error){msg($('apptMessage'),'تعذر التحقق من ارتباط المريض بالقسم: '+link.error.message);return;}const selectedPatient=patients.find(p=>p.id===patientId);if(!link.data&&selectedPatient?.department_id!==departmentId){msg($('apptMessage'),'هذا القسم غير مرتبط بملف المريض. افتح ملف المريض وأضف القسم أولًا.');return;}const duration=Number(f.get('duration'));if(!Number.isFinite(duration)||duration<5||duration>240){msg($('apptMessage'),'أدخل مدة جلسة صحيحة بين 5 و240 دقيقة.');return;}const sessionPrice=Number(f.get('session_price'));if(type==='therapy'&&(!Number.isFinite(sessionPrice)||sessionPrice<0)){msg($('apptMessage'),'أدخل سعر جلسة صحيحًا.');return;}const payload={patient_id:patientId,department_id:departmentId,therapist_id:f.get('therapist_id')||null,appointment_at:new Date(f.get('appointment_at')).toISOString(),duration_minutes:duration,status,notes:f.get('notes')||null,appointment_type:type,package_id:f.get('package_id')||null,session_price:type==='therapy'?sessionPrice:null};if(!editId)payload.created_by=state.user.id;const btn=e.currentTarget.querySelector('button[type=submit]');btn.disabled=true;const result=editId?await sb.from('appointments').update(payload).eq('id',editId):await sb.from('appointments').insert(payload);btn.disabled=false;if(result.error){msg($('apptMessage'),'لم يتم الحفظ: '+result.error.message);return;}msg($('apptMessage'),editId?'تم تحديث الموعد بنجاح.':'تم تسجيل الموعد.','success');setTimeout(appointmentsPage,700);});
+    $('apptForm').addEventListener('submit',async e=>{
+      e.preventDefault();
+      const form=e.currentTarget;
+      const btn=form.querySelector('button[type=submit]');
+      const message=$('apptMessage');
+      if(btn.disabled)return;
+      btn.disabled=true;
+      try{
+        msg(message,'جارٍ التحقق من البيانات وحفظ الموعد…');
+        const {data:sessionData,error:sessionError}=await sb.auth.getSession();
+        if(sessionError)throw new Error('تعذر التحقق من جلسة الدخول: '+sessionError.message);
+        if(!sessionData?.session?.user?.id){
+          msg(message,'انتهت جلسة الدخول. افتح تسجيل الدخول مرة واحدة ثم أعد المحاولة.');
+          return;
+        }
+        const f=new FormData(form);
+        const type=f.get('appointment_type');
+        const status=f.get('status');
+        if(type==='therapy'&&status==='completed'){
+          msg(message,'لا يتم اختيار مكتمل من نموذج الموعد؛ استخدم زر تأكيد الجلسة من الكلندر.');
+          return;
+        }
+        const patientId=String(f.get('patient_id')||'');
+        const departmentId=String(f.get('department_id')||'');
+        const appointmentValue=String(f.get('appointment_at')||'');
+        if(!patientId||!departmentId||!appointmentValue){msg(message,'أكمل اختيار المريض والقسم والتاريخ والوقت.');return;}
+        const link=await sb.from('patient_departments').select('department_id').eq('patient_id',patientId).eq('department_id',departmentId).maybeSingle();
+        if(link.error)throw new Error('تعذر التحقق من ارتباط المريض بالقسم: '+link.error.message);
+        const selectedPatient=patients.find(p=>p.id===patientId);
+        if(!link.data&&selectedPatient?.department_id!==departmentId){
+          msg(message,'هذا القسم غير مرتبط بملف المريض. افتح ملف المريض وأضف القسم أولًا.');
+          return;
+        }
+        const duration=Number(f.get('duration'));
+        if(!Number.isFinite(duration)||duration<5||duration>240){msg(message,'أدخل مدة جلسة صحيحة بين 5 و240 دقيقة.');return;}
+        const sessionPrice=Number(f.get('session_price'));
+        if(type==='therapy'&&(!Number.isFinite(sessionPrice)||sessionPrice<0)){msg(message,'أدخل سعر جلسة صحيحًا.');return;}
+        const appointmentDate=new Date(appointmentValue);
+        if(Number.isNaN(appointmentDate.getTime())){msg(message,'التاريخ والوقت غير صحيحين.');return;}
+        const payload={
+          patient_id:patientId,
+          department_id:departmentId,
+          therapist_id:f.get('therapist_id')||null,
+          appointment_at:appointmentDate.toISOString(),
+          duration_minutes:duration,
+          status,
+          notes:f.get('notes')||null,
+          appointment_type:type,
+          package_id:f.get('package_id')||null,
+          session_price:type==='therapy'?sessionPrice:null
+        };
+        if(!editId)payload.created_by=sessionData.session.user.id;
+        const result=editId
+          ?await sb.from('appointments').update(payload).eq('id',editId).select('id').maybeSingle()
+          :await sb.from('appointments').insert(payload).select('id').single();
+        if(result.error)throw new Error(result.error.message);
+        if(!result.data?.id)throw new Error('لم تُرجع قاعدة البيانات رقم الموعد بعد الحفظ؛ لم يتم تأكيد نجاح العملية.');
+        msg(message,editId?'تم تحديث الموعد بنجاح.':'تم تسجيل الموعد بنجاح.','success');
+        setTimeout(()=>appointmentsPage(),900);
+      }catch(error){
+        console.error('Sanad appointment save failed:',error);
+        msg(message,'تعذر حفظ الموعد: '+(error?.message||'خطأ غير معروف')+' — لم يتم تأكيد الحفظ.');
+      }finally{
+        btn.disabled=false;
+      }
+    });
   }
   async function completeAssessment(id){
     if(!isRole('admin','secretary'))return;
