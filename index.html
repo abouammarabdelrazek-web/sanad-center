@@ -565,9 +565,8 @@
         $('apptForm').elements.session_price.value=setting.data.session_price;
       }
     };
-    await refreshPackages();
-    if(!existing) await refreshAppointmentDuration();
-    if(existing?.package_id)$('appointmentPackage').value=existing.package_id;
+    // Bind submit synchronously before any asynchronous package/settings reads.
+    // If those reads fail, the form must never fall back to native page submission.
     $('apptForm').addEventListener('submit',async e=>{
       e.preventDefault();
       const form=e.currentTarget;
@@ -634,6 +633,17 @@
         btn.disabled=false;
       }
     });
+    // Load optional form helpers only after the submit handler is safely attached.
+    try{
+      await refreshPackages();
+      if(!existing) await refreshAppointmentDuration();
+      if(existing?.package_id)$('appointmentPackage').value=existing.package_id;
+    }catch(initError){
+      console.error('Sanad appointment form initialization failed:',initError);
+      const hint=$('durationHint');
+      if(hint)hint.textContent='تعذر تحميل بعض البيانات المساعدة؛ يمكنك إدخال المدة يدويًا والمتابعة.';
+      msg($('apptMessage'),'تعذر تحميل بعض البيانات المساعدة. راجع الحقول وأكمل البيانات يدويًا.');
+    }
   }
   async function completeAssessment(id){
     if(!isRole('admin','secretary'))return;
