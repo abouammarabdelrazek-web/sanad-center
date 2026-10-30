@@ -533,7 +533,7 @@
     const depts=allowedDepartments();
     const localDate=existing?new Date(new Date(existing.appointment_at).getTime()-new Date(existing.appointment_at).getTimezoneOffset()*60000).toISOString().slice(0,16):'';
     const apptType=existing?.appointment_type||'therapy';
-    setPage(editId?'تعديل الموعد':'إضافة موعد',`<form id="apptForm"><div class="form-grid"><div class="field span-2"><label>المريض *</label><select name="patient_id" required><option value="">اختر المريض</option>${patients.map(p=>`<option value="${esc(p.id)}" ${p.id===existing?.patient_id?'selected':''}>${esc(p.full_name)}</option>`).join('')}</select></div><div class="field"><label>القسم *</label><select name="department_id" required>${depts.map(d=>`<option value="${esc(d.id)}" ${d.id===(existing?.department_id||state.profile.department_id)?'selected':''}>${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label>نوع الموعد *</label><select name="appointment_type"><option value="assessment" ${apptType==='assessment'?'selected':''}>كشف / تقييم أولي</option><option value="therapy" ${apptType==='therapy'?'selected':''}>جلسة علاجية</option></select></div><div class="field span-2"><label>الباقة المرتبطة (اختياري)</label><select name="package_id" id="appointmentPackage"><option value="">بدون باقة — جلسة فردية</option></select><small class="muted">عند تأكيد جلسة الباقة يُخصم استهلاك جلسة واحدة فقط، دون تسجيل إيراد مكرر.</small></div><div class="field"><label>سعر الجلسة (ج.م) *</label><input name="session_price" type="number" min="0" step="0.01" value="${esc(existing?.session_price??'')}"></div><div class="field"><label>التاريخ والوقت *</label><input name="appointment_at" type="datetime-local" value="${esc(localDate)}" required></div><div class="field"><label>المعالج المسؤول</label><select name="therapist_id"><option value="">لم يحدد</option>${state.therapists.filter(x=>x.department_ids.includes(existing?.department_id||state.profile.department_id)||!existing).map(x=>`<option value="${esc(x.id)}" ${x.id===existing?.therapist_id?'selected':''}>${esc(x.full_name)}${x.job_title?' — '+esc(x.job_title):''}</option>`).join('')}</select></div><div class="field"><label>المدة بالدقائق *</label><input name="duration" type="number" min="5" max="240" value="${esc(existing?.duration_minutes??'')}" required><small class="muted" id="durationHint">تُحمّل المدة الافتراضية من إعدادات المريض والقسم.</small></div><div class="field"><label>الحالة</label><select name="status" ${existing?.status==='completed'?'disabled':''}>${[['scheduled','مجدول'],['cancelled','ملغي'],['no_show','لم يأخذ الجلسة']].map(([v,l])=>`<option value="${v}" ${(existing?.status||'scheduled')===v?'selected':''}>${l}</option>`).join('')}</select><small class="muted">إتمام الجلسة يتم من زر التأكيد في الكلندر فقط.</small></div><div class="field span-2"><label>ملاحظات</label><textarea name="notes">${esc(existing?.notes||'')}</textarea></div></div><div class="toolbar"><button class="btn" type="submit">${editId?'حفظ التعديلات':'حفظ الموعد'}</button><button class="btn ghost" id="cancelAppt" type="button">رجوع</button></div><div id="apptMessage"></div></form>`);
+    setPage(editId?'تعديل الموعد':'إضافة موعد',`<form id="apptForm"><div class="form-grid"><div class="field span-2"><label>المريض *</label><select name="patient_id" required><option value="">اختر المريض</option>${patients.map(p=>`<option value="${esc(p.id)}" ${p.id===existing?.patient_id?'selected':''}>${esc(p.full_name)}</option>`).join('')}</select></div><div class="field"><label>القسم *</label><select name="department_id" required>${depts.map(d=>`<option value="${esc(d.id)}" ${d.id===(existing?.department_id||state.profile.department_id)?'selected':''}>${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label>نوع الموعد *</label><select name="appointment_type"><option value="assessment" ${apptType==='assessment'?'selected':''}>كشف / تقييم أولي</option><option value="therapy" ${apptType==='therapy'?'selected':''}>جلسة علاجية</option></select></div><div class="field span-2"><label>الباقة المرتبطة (اختياري)</label><select name="package_id" id="appointmentPackage"><option value="">بدون باقة — جلسة فردية</option></select><small class="muted">عند تأكيد جلسة الباقة يُخصم استهلاك جلسة واحدة فقط، دون تسجيل إيراد مكرر.</small></div><div class="field"><label>سعر الجلسة (ج.م) *</label><input name="session_price" type="number" min="0" step="0.01" value="${esc(existing?.session_price??'')}"></div><div class="field"><label>التاريخ والوقت *</label><input name="appointment_at" type="datetime-local" value="${esc(localDate)}" required></div><div class="field"><label>المعالج المسؤول</label><select name="therapist_id"><option value="">لم يحدد</option>${state.therapists.filter(x=>x.department_ids.includes(existing?.department_id||state.profile.department_id)||!existing).map(x=>`<option value="${esc(x.id)}" ${x.id===existing?.therapist_id?'selected':''}>${esc(x.full_name)}${x.job_title?' — '+esc(x.job_title):''}</option>`).join('')}</select></div><div class="field"><label>المدة بالدقائق *</label><input name="duration" type="number" min="5" max="240" value="${esc(existing?.duration_minutes??'')}" required><small class="muted" id="durationHint">تُحمّل المدة الافتراضية من إعدادات المريض والقسم.</small></div><div class="field"><label>الحالة</label><select name="status" ${existing?.status==='completed'?'disabled':''}>${[['scheduled','مجدول'],['cancelled','ملغي'],['no_show','لم يأخذ الجلسة']].map(([v,l])=>`<option value="${v}" ${(existing?.status||'scheduled')===v?'selected':''}>${l}</option>`).join('')}</select><small class="muted">إتمام الجلسة يتم من زر التأكيد في الكلندر فقط.</small></div><div class="field span-2"><label>ملاحظات</label><textarea name="notes">${esc(existing?.notes||'')}</textarea></div></div><div class="toolbar"><button class="btn" type="button" id="saveAppointmentBtn">${editId?'حفظ التعديلات':'حفظ الموعد'}</button><button class="btn ghost" id="cancelAppt" type="button">رجوع</button></div><div id="apptMessage"></div></form>`);
     const refreshPackages=async()=>{
       const patientId=$('apptForm').elements.patient_id.value,departmentId=$('apptForm').elements.department_id.value;
       const select=$('appointmentPackage');const keep=select.value||existing?.package_id||'';
@@ -571,10 +571,10 @@
     };
     // Bind submit synchronously before any asynchronous package/settings reads.
     // If those reads fail, the form must never fall back to native page submission.
-    $('apptForm').addEventListener('submit',async e=>{
-      e.preventDefault();
-      const form=e.currentTarget;
-      const btn=form.querySelector('button[type=submit]');
+    const saveAppointment=async e=>{
+      if(e?.preventDefault)e.preventDefault();
+      const form=$('apptForm');
+      const btn=$('saveAppointmentBtn');
       const message=$('apptMessage');
       if(btn.disabled)return;
       btn.disabled=true;
@@ -655,11 +655,16 @@
         setTimeout(()=>appointmentsPage(),900);
       }catch(error){
         console.error('Sanad appointment save failed:',error);
-        msg(message,'تعذر حفظ الموعد: '+(error?.message||'خطأ غير معروف')+' — لم يتم تأكيد الحفظ.');
+        const errorText='تعذر حفظ الموعد: '+(error?.message||'خطأ غير معروف')+' — لم يتم تأكيد الحفظ.';
+        msg(message,errorText);
+        alert(errorText);
       }finally{
         btn.disabled=false;
       }
-    });
+    };
+    // Bind directly to the visible save button; also block any native form submission.
+    $('saveAppointmentBtn').addEventListener('click',saveAppointment);
+    $('apptForm').addEventListener('submit',e=>{e.preventDefault();saveAppointment(e);});
     // Load optional form helpers only after the submit handler is safely attached.
     try{
       await refreshPackages();
