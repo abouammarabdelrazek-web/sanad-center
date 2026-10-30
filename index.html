@@ -199,7 +199,7 @@
       return;
     }
     let patientQ=sb.from('patients').select('id',{count:'exact',head:true});
-    let apptQ=sb.from('appointments').select('id',{count:'exact',head:true}).gte('appointment_at',new Date(new Date().setHours(0,0,0,0)).toISOString()).lt('appointment_at',new Date(new Date().setHours(24,0,0,0)).toISOString());
+    let apptQ=sb.from('sanad_calendar_appointments').select('id',{count:'exact',head:true}).gte('appointment_at',new Date(new Date().setHours(0,0,0,0)).toISOString()).lt('appointment_at',new Date(new Date().setHours(24,0,0,0)).toISOString());
     let managerPatientCount;
     if(role==='technical_manager' && state.managerDepartments.length){
       apptQ=apptQ.in('department_id',state.managerDepartments);
@@ -410,27 +410,31 @@
     const from=cairoDayBounds(monthStart).start;
     const to=cairoDayBounds(monthEnd).start;
     setPage('المواعيد والجلسات','<div class="empty">جارٍ تحميل جدول اليوم…</div>',isRole('admin','secretary','receptionist')?'<button class="btn" id="addApptBtn" type="button">+ إضافة موعد</button>':'');
-    let q=sb.from('appointments').select('id,patient_id,department_id,therapist_id,appointment_at,appointment_end_at,duration_minutes,status,notes,appointment_type,package_id,session_price,patients(full_name)').gte('appointment_at',from).lt('appointment_at',to).order('appointment_at',{ascending:true}).limit(3000);
+    let q=sb.from('sanad_calendar_appointments').select('id,patient_id,department_id,therapist_id,appointment_at,appointment_end_at,duration_minutes,status,notes,appointment_type,package_id,session_price,collected_amount,payment_method,patients(full_name)').gte('appointment_at',from).lt('appointment_at',to).order('appointment_at',{ascending:true}).limit(3000);
     if(state.profile.role==='technical_manager'&&state.managerDepartments.length)q=q.in('department_id',state.managerDepartments);
-    if(state.profile.role==='therapist')q=q.eq('therapist_id',state.user.id);
     const [apptRes,reviewRes]=await Promise.all([q,sb.from('sanad_monthly_schedule_reviews').select('month_start,status,reviewed_at,reviewed_by').eq('month_start',monthStart).maybeSingle()]);
     if(apptRes.error){$('sectionBody').innerHTML=`<div class="notice error">تعذر تحميل المواعيد: ${esc(apptRes.error.message)}</div>`;return;}
     state.appointments=apptRes.data||[];
     const review=reviewRes.data||null, archived=review?.status==='reviewed';
     const depts=allowedDepartments();
-    const therapistOptions=state.therapists;
+    const therapistOptions=[...state.therapists,...state.staff.filter(x=>['technical_manager','therapist'].includes(x.role)).map(x=>({...x,id:x.user_id,department_ids:state.managerDepartments}))];
     const canSchedule=isRole('admin','secretary','receptionist')&&!archived;
-    $('sectionBody').innerHTML=`<div class="calendar-simple-toolbar"><div class="calendar-date-nav"><button class="btn secondary" id="prevScheduleDay" type="button" aria-label="اليوم السابق">‹</button><button class="btn ghost" id="todaySchedule" type="button">اليوم</button><button class="btn secondary" id="nextScheduleDay" type="button" aria-label="اليوم التالي">›</button></div><label class="calendar-date-label">التاريخ <input id="scheduleAnchorDate" type="date" value="${selectedDate}"></label></div>${archived?`<div class="notice error">هذا الشهر مؤرشف؛ المواعيد للعرض فقط.</div>`:''}<div id="scheduleSummary" class="calendar-summary"></div><div id="scheduleTable" class="calendar-appointments"></div>`;
+    $('sectionBody').innerHTML=`<div class="toolbar" style="margin-bottom:12px;justify-content:space-between"><div class="toolbar"><button class="btn secondary" id="prevScheduleDay" type="button">اليوم السابق ‹</button><button class="btn ghost" id="todaySchedule" type="button">اليوم</button><button class="btn secondary" id="nextScheduleDay" type="button">› اليوم التالي</button><label class="small">التاريخ <input id="scheduleAnchorDate" type="date" value="${selectedDate}"></label></div>${canSchedule?'<button class="btn" id="openScheduleSheet" type="button">+ توزيع جدول دكتور (شيت)</button>':''}</div><div class="schedule-filters"><select id="scheduleDept"><option value="all">كل الأقسام</option>${depts.map(d=>`<option value="${esc(d.id)}">قسم: ${esc(d.name)}</option>`).join('')}</select><select id="scheduleTherapist"><option value="all">كل الدكاترة</option>${therapistOptions.map(t=>`<option value="${esc(t.id)}">د. ${esc(t.full_name)}</option>`).join('')}</select><input id="schedulePatientSearch" type="search" placeholder="ابحث عن المريض بالاسم…"></div><div id="scheduleArchiveStatus" class="analysis-note">${archived?`<strong>الشهر مؤرشف ومعتمد للمراجعة.</strong> الجدول محفوظ للقراءة فقط منذ ${esc(review.reviewed_at?dateTime(review.reviewed_at):'تاريخ الاعتماد')}.`:`<strong>الشهر ${monthStart.slice(0,7)} غير مؤرشف.</strong> المواعيد محفوظة ويمكن الرجوع لأي يوم خلال الشهر.`}${reviewRes.error?`<br>تعذر قراءة حالة الأرشفة: ${esc(reviewRes.error.message)}`:''}</div><div id="scheduleSummary" class="muted small" style="margin-bottom:10px"></div><div id="scheduleTable"></div>`;
     function cairoDay(value){return new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Cairo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));}
     function renderSchedule(){
-      const day=$('scheduleAnchorDate').value;
+      const dept=$('scheduleDept').value,therapist=$('scheduleTherapist').value,day=$('scheduleAnchorDate').value;
       let rows=state.appointments.filter(a=>cairoDay(a.appointment_at)===day);
+      if(dept!=='all')rows=rows.filter(a=>a.department_id===dept);
+      if(therapist!=='all')rows=rows.filter(a=>a.therapist_id===therapist);
+      const patientTerm=($('schedulePatientSearch')?.value||'').trim().toLocaleLowerCase('ar');
+      if(patientTerm)rows=rows.filter(a=>(a.patients?.full_name||'').toLocaleLowerCase('ar').includes(patientTerm));
       rows.sort((a,b)=>new Date(a.appointment_at)-new Date(b.appointment_at));
-      $('scheduleSummary').textContent=`${new Date(day+'T12:00:00').toLocaleDateString('ar-EG',{weekday:'long',year:'numeric',month:'long',day:'numeric'})} · ${rows.length} موعد`;
-      $('scheduleTable').innerHTML=rows.length?rows.map(a=>{const dt=new Date(a.appointment_at),end=a.appointment_end_at?new Date(a.appointment_end_at):new Date(dt.getTime()+Number(a.duration_minutes||45)*60000);return `<article class="calendar-appointment-card"><div class="calendar-appointment-time">${dt.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})} – ${end.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})}</div><div class="calendar-appointment-main"><strong>${esc(a.patients?.full_name||'مريض غير معروف')}</strong><div class="calendar-appointment-meta">${esc(deptName(a.department_id))} · ${a.appointment_type==='assessment'?'كشف / تقييم':'جلسة علاجية'} · ${esc(a.duration_minutes??45)} دقيقة</div><div class="calendar-appointment-meta">المعالج: ${esc(staffName(a.therapist_id))}</div></div><div class="calendar-appointment-status"><span class="badge ${a.status==='cancelled'?'cancelled':a.status==='pending'?'pending':''}">${esc(statusName(a.status))}</span></div><div class="calendar-appointment-actions">${isRole('admin','secretary','receptionist')&&!archived?`${a.status!=='completed'&&a.status!=='cancelled'&&a.appointment_type==='assessment'?`<button class="btn secondary" data-complete-assessment="${esc(a.id)}" type="button">إتمام الكشف</button>`:''}${a.status!=='completed'&&a.status!=='cancelled'&&a.appointment_type!=='assessment'?`<button class="btn secondary" data-complete-therapy="${esc(a.id)}" type="button">إتمام الجلسة</button><button class="btn ghost" data-no-show="${esc(a.id)}" type="button">لم يحضر</button>`:''}<button class="btn ghost" data-edit-appt="${esc(a.id)}" type="button">تعديل</button>${a.status!=='cancelled'&&a.status!=='completed'?`<button class="btn danger" data-cancel-appt="${esc(a.id)}" type="button">إلغاء</button>`:''}`:state.profile.role==='technical_manager'?'عرض فقط':''}</div></article>`;}).join(''):'<div class="empty">لا توجد مواعيد في هذا اليوم.</div>';
+      $('scheduleSummary').textContent=`جدول ${new Date(day+'T12:00:00').toLocaleDateString('ar-EG',{weekday:'long',year:'numeric',month:'long',day:'numeric'})} — ${rows.length} موعد — ${new Set(rows.map(a=>a.therapist_id).filter(Boolean)).size} دكتور.`;
+      $('scheduleTable').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>من – إلى</th><th>الدكتور / المعالج</th><th>المريض</th><th>القسم</th><th>المدة</th><th>النوع</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody>${rows.map(a=>{const dt=new Date(a.appointment_at),end=a.appointment_end_at?new Date(a.appointment_end_at):new Date(dt.getTime()+Number(a.duration_minutes||45)*60000);return `<tr><td>${dt.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})} – ${end.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})}</td><td>${esc(staffName(a.therapist_id))}</td><td>${esc(a.patients?.full_name||'—')}</td><td>${esc(deptName(a.department_id))}</td><td>${esc(a.duration_minutes??45)} دقيقة</td><td>${a.appointment_type==='assessment'?'كشف':'جلسة علاجية'}</td><td><span class="badge ${a.status==='cancelled'?'cancelled':a.status==='pending'?'pending':''}">${esc(statusName(a.status))}</span></td><td><div class="toolbar">${isRole('admin','secretary','receptionist')&&!archived?`${a.status!=='completed'&&a.status!=='cancelled'&&a.appointment_type==='assessment'?`<button class="btn secondary" data-complete-assessment="${esc(a.id)}" type="button">تأكيد إتمام الكشف</button>`:''}${a.status!=='completed'&&a.status!=='cancelled'&&a.appointment_type!=='assessment'?`<button class="btn secondary" data-complete-therapy="${esc(a.id)}" type="button">تسجيل الجلسة وإتمامها</button><button class="btn ghost" data-no-show="${esc(a.id)}" type="button">لم يحضر</button>`:''}<button class="btn ghost" data-edit-appt="${esc(a.id)}" type="button">تعديل</button>${a.status!=='cancelled'&&a.status!=='completed'?`<button class="btn danger" data-cancel-appt="${esc(a.id)}" type="button">إلغاء</button>`:''}`:state.profile.role==='technical_manager'&&!archived&&a.status!=='completed'&&a.status!=='cancelled'&&a.appointment_type!=='assessment'?`<button class="btn secondary" data-complete-therapy="${esc(a.id)}" type="button">تسجيل الجلسة</button>`:'—'}</div></td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty">لا توجد مواعيد في هذا اليوم حسب الفلاتر المختارة.</div>';
       $('scheduleTable').querySelectorAll('[data-edit-appt]').forEach(b=>b.addEventListener('click',()=>appointmentForm(b.dataset.editAppt)));
-      $('scheduleTable').querySelectorAll('[data-complete-therapy]').forEach(b=>b.addEventListener('click',()=>completeTherapyAppointment(b.dataset.completeTherapy)));$('scheduleTable').querySelectorAll('[data-no-show]').forEach(b=>b.addEventListener('click',()=>markAppointmentNoShow(b.dataset.noShow)));
+      $('scheduleTable').querySelectorAll('[data-complete-therapy]').forEach(b=>b.addEventListener('click',()=>completeTherapyAppointment(b.dataset.completeTherapy)));
       $('scheduleTable').querySelectorAll('[data-complete-assessment]').forEach(b=>b.addEventListener('click',()=>completeAssessment(b.dataset.completeAssessment)));
+      $('scheduleTable').querySelectorAll('[data-no-show]').forEach(b=>b.addEventListener('click',()=>markAppointmentNoShow(b.dataset.noShow)));
       $('scheduleTable').querySelectorAll('[data-cancel-appt]').forEach(b=>b.addEventListener('click',()=>cancelAppointment(b.dataset.cancelAppt)));
     }
     const changeDay=async value=>{if(!value)return;state.calendarDate=value;await appointmentsPage();};
@@ -438,11 +442,13 @@
     $('prevScheduleDay').addEventListener('click',()=>{const d=new Date($('scheduleAnchorDate').value+'T12:00:00');d.setDate(d.getDate()-1);changeDay(cairoDateString(d));});
     $('nextScheduleDay').addEventListener('click',()=>{const d=new Date($('scheduleAnchorDate').value+'T12:00:00');d.setDate(d.getDate()+1);changeDay(cairoDateString(d));});
     $('todaySchedule').addEventListener('click',()=>changeDay(cairoDateString()));
+    ['scheduleDept','scheduleTherapist'].forEach(id=>$(id).addEventListener('change',renderSchedule));$('schedulePatientSearch').addEventListener('input',renderSchedule);
+    $('openScheduleSheet')?.addEventListener('click',bulkSchedulePage);
     renderSchedule();
     $('sectionActions').innerHTML=isRole('admin','secretary','receptionist')&&!archived?'<button class="btn" id="addApptBtn" type="button">+ إضافة موعد</button>':'';$('addApptBtn')?.addEventListener('click',()=>appointmentForm());
   }
   async function bulkSchedulePage(){
-    if(!isRole('admin','secretary')){setPage('توزيع جدول الدكتور','<div class="notice error">توزيع المواعيد متاح للمدير الإداري والسكرتارية فقط.</div>');return;}
+    if(!isRole('admin','secretary','receptionist')){setPage('توزيع جدول الدكتور','<div class="notice error">توزيع المواعيد متاح للمدير الإداري والسكرتارية فقط.</div>');return;}
     setPage('توزيع جدول الدكتور','<div class="empty">جارٍ تجهيز شيت توزيع الحالات…</div>');
     const initialDay=state.calendarDate||cairoDateString();
     const [pRes,linkRes]=await Promise.all([
@@ -451,7 +457,7 @@
     ]);
     if(pRes.error||linkRes.error){setPage('توزيع جدول الدكتور',`<div class="notice error">تعذر تجهيز الشيت: ${esc(pRes.error?.message||linkRes.error?.message)}</div>`);return;}
     const patients=pRes.data||[],links=linkRes.data||[];let existing=[];
-    async function loadExistingForDay(day){const [y,m]=day.split('-').map(Number);const a=cairoDayBounds(`${y}-${String(m).padStart(2,'0')}-01`).start;const next=new Date(y,m,1);const b=cairoDayBounds(`${next.getFullYear()}-${String(next.getMonth()+1).padStart(2,'0')}-01`).start;const r=await sb.from('appointments').select('id,patient_id,department_id,therapist_id,appointment_at,duration_minutes,status,appointment_type,patients(full_name)').gte('appointment_at',a).lt('appointment_at',b).neq('status','cancelled').limit(3000);if(r.error)throw r.error;existing=r.data||[];}
+    async function loadExistingForDay(day){const [y,m]=day.split('-').map(Number);const a=cairoDayBounds(`${y}-${String(m).padStart(2,'0')}-01`).start;const next=new Date(y,m,1);const b=cairoDayBounds(`${next.getFullYear()}-${String(next.getMonth()+1).padStart(2,'0')}-01`).start;const r=await sb.from('sanad_calendar_appointments').select('id,patient_id,department_id,therapist_id,appointment_at,duration_minutes,status,appointment_type,patients(full_name)').gte('appointment_at',a).lt('appointment_at',b).neq('status','cancelled').limit(3000);if(r.error)throw r.error;existing=r.data||[];}
     const doctors=state.therapists;
     const depts=allowedDepartments();
     if(!doctors.length){setPage('توزيع جدول الدكتور','<div class="notice error">لا توجد حسابات دكاترة/معالجين نشطة في ملفات الموظفين. اربط حساب الدكتور أولًا من صفحة حسابات الموظفين.</div>');return;}
@@ -500,7 +506,7 @@
       const btn=$('saveScheduleSheet');btn.disabled=true;msg($('sheetMessage'),'جارٍ حفظ المواعيد بالترتيب…','success');const saved=[],failed=[];
       for(const a of prepared){
         const payload={patient_id:a.patientId,department_id:a.departmentId,therapist_id:doctorId,appointment_at:a.start.toISOString(),duration_minutes:a.duration,status:'scheduled',appointment_type:a.type,session_price:a.type==='therapy'?a.sessionPrice:null,created_by:state.user.id};
-        const result=await sb.from('appointments').insert(payload).select('id').single();
+        const result=await sb.from('sanad_calendar_appointments').insert(payload).select('id').single();
         if(result.error)failed.push({row:a.rowNo,patient:a.patientName,error:result.error.message});else saved.push({id:result.data.id,...a});
       }
       btn.disabled=false;
@@ -511,23 +517,23 @@
   }
   async function cancelAppointment(id){
     if(!confirm('هل تريد إلغاء هذا الموعد؟'))return;
-    const {error}=await sb.from('appointments').update({status:'cancelled'}).eq('id',id);
+    const {error}=await sb.from('sanad_calendar_appointments').update({status:'cancelled'}).eq('id',id);
     if(error){alert('تعذر إلغاء الموعد: '+error.message);return;}
     await appointmentsPage();
   }
   function statusName(s){return ({scheduled:'مجدول',confirmed:'مؤكد',completed:'تم',cancelled:'ملغي',pending:'قيد الانتظار',no_show:'لم يحضر'})[s]||s||'مجدول';}
   async function appointmentForm(editId=null){
-    if(!isRole('admin','secretary')){setPage('المواعيد','<div class="notice error">إضافة وتعديل المواعيد متاحان للمدير الإداري والسكرتارية فقط.</div>');return;}
+    if(!isRole('admin','secretary','receptionist')){setPage('المواعيد','<div class="notice error">إضافة وتعديل المواعيد متاحان للمدير الإداري والسكرتارية فقط.</div>');return;}
     try{await refreshCalendarTherapists();}catch(e){setPage('إضافة موعد',`<div class="notice error">${esc(e.message)}</div>`);return;}
     let existing=null;
-    if(editId){const {data,error}=await sb.from('appointments').select('id,patient_id,department_id,therapist_id,appointment_at,duration_minutes,status,notes,appointment_type,package_id').eq('id',editId).maybeSingle();if(error||!data){setPage('تعديل الموعد',`<div class="notice error">تعذر تحميل الموعد: ${esc(error?.message||'الموعد غير موجود')}</div>`);return;}existing=data;}
+    if(editId){const {data,error}=await sb.from('sanad_calendar_appointments').select('id,patient_id,department_id,therapist_id,appointment_at,duration_minutes,status,notes,appointment_type,package_id').eq('id',editId).maybeSingle();if(error||!data){setPage('تعديل الموعد',`<div class="notice error">تعذر تحميل الموعد: ${esc(error?.message||'الموعد غير موجود')}</div>`);return;}existing=data;}
     const pRes=await sb.from('patients').select('id,full_name,department_id').eq('is_active',true).order('full_name').limit(1000);
     if(pRes.error){setPage('إضافة موعد',`<div class="notice error">تعذر تحميل قائمة المرضى: ${esc(pRes.error.message)}</div>`);return;}
     const patients=pRes.data||[];
     const depts=allowedDepartments();
     const localDate=existing?new Date(new Date(existing.appointment_at).getTime()-new Date(existing.appointment_at).getTimezoneOffset()*60000).toISOString().slice(0,16):'';
     const apptType=existing?.appointment_type||'therapy';
-    setPage(editId?'تعديل الموعد':'إضافة موعد',`<form id="apptForm"><div class="form-grid"><div class="field span-2"><label>المريض *</label><select name="patient_id" required><option value="">اختر المريض</option>${patients.map(p=>`<option value="${esc(p.id)}" ${p.id===existing?.patient_id?'selected':''}>${esc(p.full_name)}</option>`).join('')}</select></div><div class="field"><label>القسم *</label><select name="department_id" required>${depts.map(d=>`<option value="${esc(d.id)}" ${d.id===(existing?.department_id||state.profile.department_id)?'selected':''}>${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label>نوع الموعد *</label><select name="appointment_type"><option value="assessment" ${apptType==='assessment'?'selected':''}>كشف / تقييم أولي</option><option value="therapy" ${apptType==='therapy'?'selected':''}>جلسة علاجية</option></select></div><div class="field span-2"><label>الباقة المرتبطة (اختياري)</label><select name="package_id" id="appointmentPackage"><option value="">بدون باقة — جلسة فردية</option></select><small class="muted">عند تأكيد جلسة الباقة يُخصم استهلاك جلسة واحدة فقط، دون تسجيل إيراد مكرر.</small></div><div class="field"><label>سعر الجلسة (ج.م) *</label><input name="session_price" type="number" min="0" step="0.01" value="${esc(existing?.session_price??'')}"></div><div class="field"><label>التاريخ والوقت *</label><input name="appointment_at" type="datetime-local" value="${esc(localDate)}" required></div><div class="field"><label>المعالج المسؤول</label><select name="therapist_id"><option value="">لم يحدد</option>${state.therapists.filter(x=>x.department_ids.includes(existing?.department_id||state.profile.department_id)||!existing).map(x=>`<option value="${esc(x.id)}" ${x.id===existing?.therapist_id?'selected':''}>${esc(x.full_name)}${x.job_title?' — '+esc(x.job_title):''}</option>`).join('')}</select></div><div class="field"><label>المدة بالدقائق *</label><input name="duration" type="number" min="5" max="240" value="${esc(existing?.duration_minutes??'')}" required><small class="muted" id="durationHint">تُحمّل المدة الافتراضية من إعدادات المريض والقسم.</small></div><div class="field"><label>الحالة</label><select name="status">${[['scheduled','مجدول'],['confirmed','مؤكد'],['cancelled','ملغي'],['no_show','لم يأخذ الجلسة']].map(([v,l])=>`<option value="${v}" ${(existing?.status||'scheduled')===v?'selected':''}>${l}</option>`).join('')}</select><small class="muted">إتمام الجلسة يتم من زر التأكيد في الكلندر فقط.</small></div><div class="field span-2"><label>ملاحظات</label><textarea name="notes">${esc(existing?.notes||'')}</textarea></div></div><div class="toolbar"><button class="btn" type="submit">${editId?'حفظ التعديلات':'حفظ الموعد'}</button><button class="btn ghost" id="cancelAppt" type="button">رجوع</button></div><div id="apptMessage"></div></form>`);
+    setPage(editId?'تعديل الموعد':'إضافة موعد',`<form id="apptForm"><div class="form-grid"><div class="field span-2"><label>المريض *</label><select name="patient_id" required><option value="">اختر المريض</option>${patients.map(p=>`<option value="${esc(p.id)}" ${p.id===existing?.patient_id?'selected':''}>${esc(p.full_name)}</option>`).join('')}</select></div><div class="field"><label>القسم *</label><select name="department_id" required>${depts.map(d=>`<option value="${esc(d.id)}" ${d.id===(existing?.department_id||state.profile.department_id)?'selected':''}>${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label>نوع الموعد *</label><select name="appointment_type"><option value="assessment" ${apptType==='assessment'?'selected':''}>كشف / تقييم أولي</option><option value="therapy" ${apptType==='therapy'?'selected':''}>جلسة علاجية</option></select></div><div class="field span-2"><label>الباقة المرتبطة (اختياري)</label><select name="package_id" id="appointmentPackage"><option value="">بدون باقة — جلسة فردية</option></select><small class="muted">عند تأكيد جلسة الباقة يُخصم استهلاك جلسة واحدة فقط، دون تسجيل إيراد مكرر.</small></div><div class="field"><label>سعر الجلسة (ج.م) *</label><input name="session_price" type="number" min="0" step="0.01" value="${esc(existing?.session_price??'')}"></div><div class="field"><label>التاريخ والوقت *</label><input name="appointment_at" type="datetime-local" value="${esc(localDate)}" required></div><div class="field"><label>المعالج المسؤول</label><select name="therapist_id"><option value="">لم يحدد</option>${state.therapists.filter(x=>x.department_ids.includes(existing?.department_id||state.profile.department_id)||!existing).map(x=>`<option value="${esc(x.id)}" ${x.id===existing?.therapist_id?'selected':''}>${esc(x.full_name)}${x.job_title?' — '+esc(x.job_title):''}</option>`).join('')}</select></div><div class="field"><label>المدة بالدقائق *</label><input name="duration" type="number" min="5" max="240" value="${esc(existing?.duration_minutes??'')}" required><small class="muted" id="durationHint">تُحمّل المدة الافتراضية من إعدادات المريض والقسم.</small></div><div class="field"><label>الحالة</label><select name="status" ${existing?.status==='completed'?'disabled':''}>${[['scheduled','مجدول'],['cancelled','ملغي'],['no_show','لم يأخذ الجلسة']].map(([v,l])=>`<option value="${v}" ${(existing?.status||'scheduled')===v?'selected':''}>${l}</option>`).join('')}</select><small class="muted">إتمام الجلسة يتم من زر التأكيد في الكلندر فقط.</small></div><div class="field span-2"><label>ملاحظات</label><textarea name="notes">${esc(existing?.notes||'')}</textarea></div></div><div class="toolbar"><button class="btn" type="submit">${editId?'حفظ التعديلات':'حفظ الموعد'}</button><button class="btn ghost" id="cancelAppt" type="button">رجوع</button></div><div id="apptMessage"></div></form>`);
     const refreshPackages=async()=>{
       const patientId=$('apptForm').elements.patient_id.value,departmentId=$('apptForm').elements.department_id.value;
       const select=$('appointmentPackage');const keep=select.value||existing?.package_id||'';
@@ -610,9 +616,8 @@
           department_id:departmentId,
           therapist_id:f.get('therapist_id')||null,
           appointment_at:appointmentDate.toISOString(),
-          appointment_end_at:appointmentEndDate.toISOString(),
           duration_minutes:duration,
-          status,
+          status:f.get('status')||existing?.status||'scheduled',
           notes:f.get('notes')||null,
           appointment_type:type,
           package_id:f.get('package_id')||null,
@@ -620,8 +625,8 @@
         };
         if(!editId)payload.created_by=sessionData.session.user.id;
         const result=editId
-          ?await sb.from('appointments').update(payload).eq('id',editId).select('id').maybeSingle()
-          :await sb.from('appointments').insert(payload).select('id').single();
+          ?await sb.from('sanad_calendar_appointments').update(payload).eq('id',editId).select('id').maybeSingle()
+          :await sb.from('sanad_calendar_appointments').insert(payload).select('id').single();
         if(result.error)throw new Error(result.error.message);
         if(!result.data?.id)throw new Error('لم تُرجع قاعدة البيانات رقم الموعد بعد الحفظ؛ لم يتم تأكيد نجاح العملية.');
         msg(message,editId?'تم تحديث الموعد بنجاح.':'تم تسجيل الموعد بنجاح.','success');
@@ -646,22 +651,22 @@
     }
   }
   async function completeAssessment(id){
-    if(!isRole('admin','secretary'))return;
+    if(!isRole('admin','secretary','receptionist'))return;
     if(!confirm('تأكيد إتمام الكشف؟ لن يتم خصم أي جلسة من الباقة.'))return;
-    const {error}=await sb.from('appointments').update({status:'completed'}).eq('id',id);
+    const {error}=await sb.from('sanad_calendar_appointments').update({status:'completed'}).eq('id',id);
     if(error){alert('تعذر إتمام الكشف: '+error.message);return;}
     await appointmentsPage();
   }
   async function markAppointmentNoShow(id){
     if(!isRole('admin','secretary','receptionist'))return;
     if(!confirm('تأكيد أن المريض لم يأخذ الجلسة؟ لن يتم خصم جلسة من الباقة ولن يُسجل أي إيراد.'))return;
-    const {error}=await sb.from('appointments').update({status:'no_show'}).eq('id',id).neq('status','completed');
+    const {error}=await sb.from('sanad_calendar_appointments').update({status:'no_show'}).eq('id',id).neq('status','completed');
     if(error){alert('تعذر تحديث حالة الموعد: '+error.message);return;}
     await appointmentsPage();
   }
   async function completeTherapyAppointment(id){
     if(!isRole('admin','secretary','receptionist'))return;
-    const {data:appt,error}=await sb.from('appointments').select('id,patient_id,department_id,appointment_at,duration_minutes,status,appointment_type,package_id,session_price,patients(full_name)').eq('id',id).maybeSingle();
+    const {data:appt,error}=await sb.from('sanad_calendar_appointments').select('id,patient_id,department_id,appointment_at,duration_minutes,status,appointment_type,package_id,session_price,patients(full_name)').eq('id',id).maybeSingle();
     if(error||!appt){alert('تعذر تحميل الموعد: '+(error?.message||'غير موجود'));return;}
     if(appt.status==='completed'){alert('الجلسة مسجلة كمكتملة بالفعل.');return;}
     if(appt.status==='cancelled'||appt.status==='no_show'){alert('لا يمكن إتمام موعد ملغي أو لم يأخذ المريض جلسته.');return;}
@@ -676,7 +681,7 @@
       if(!Number.isFinite(amount)||amount<0){msg($('completeSessionMessage'),'أدخل مبلغًا صحيحًا.');return;}
       if(!isPackage&&amount>0&&!['cash','card','transfer','other'].includes(method)){msg($('completeSessionMessage'),'اختر طريقة تحصيل صحيحة.');return;}
       const btn=e.currentTarget.querySelector('button[type=submit]');btn.disabled=true;
-      const result=await sb.rpc('sanad_complete_appointment_reception', {p_appointment_id:id,p_collected_amount:amount,p_payment_method:method});
+      const result=await sb.rpc('sanad_calendar_complete_appointment', {p_appointment_id:id,p_collected_amount:amount,p_payment_method:method});
       btn.disabled=false;
       if(result.error){msg($('completeSessionMessage'),'تعذر إتمام الجلسة: '+result.error.message);return;}
       msg($('completeSessionMessage'),isPackage?'تم تأكيد الجلسة وخصم جلسة واحدة من الباقة دون تكرار الإيراد.':'تم تأكيد الجلسة وتسجيل المبلغ المحصل في الإيرادات.','success');
@@ -887,7 +892,7 @@
 
   async function backupPage(){
     if(!isAdmin()){setPage('النسخ الاحتياطي','<div class="notice error">النسخ الاحتياطي متاح للمدير الإداري فقط.</div>');return;}
-    const tables=['departments','patients','patient_departments','patient_department_settings','patient_medical_records','appointments','therapy_sessions','patient_packages','package_payments','package_session_usage','financial_entries','financial_closings','treasury_accounts','staff_profiles','staff_department_access','sanad_audit_logs'];
+    const tables=['departments','patients','patient_departments','patient_department_settings','patient_medical_records','appointments','sanad_calendar_appointments','sanad_calendar_status_history','therapy_sessions','patient_packages','package_payments','package_session_usage','financial_entries','financial_closings','treasury_accounts','staff_profiles','staff_department_access','sanad_audit_logs'];
     setPage('النسخ الاحتياطي',`<p>يمكنك تنزيل نسخة بيانات تشغيلية من جداول مركز سند في ملف JSON واحد، تشمل بيانات المرضى والأقسام والسجلات الطبية والمواعيد والجلسات والباقات والمالية والموظفين وسجل العمليات.</p><div class="notice">الملف يحتوي بيانات شخصية وطبية ومالية حساسة. احفظه في مكان مشفر ومحدود الوصول، ولا ترسله عبر واتساب أو بريد غير آمن. النسخة لا تشمل حسابات الدخول في Supabase Auth أو إعدادات المشروع ومفاتيحه.</div><div class="analysis-note"><strong>الاستعادة:</strong> لا تستعد الملف من داخل الموقع مباشرة. عند الحاجة للاستعادة، استخدم نسخة قاعدة البيانات من لوحة Supabase أو اطلب تنفيذ استعادة منظمة عبر SQL بعد التأكد من العلاقات والمعرفات. لا ترفع ملف النسخة إلى مستودع GitHub العام.</div><div class="toolbar"><button class="btn" id="runBackup" type="button">تنزيل نسخة بيانات JSON</button><span class="muted small">سيتم قراءة الجداول الـ ${tables.length} مع تقسيم القراءة إلى دفعات حتى لا تُسقط السجلات الزائدة عن حد العرض.</span></div><div id="backupMessage" aria-live="polite"></div><div id="backupProgress" class="muted small" style="margin-top:10px"></div>`);
     $('runBackup')?.addEventListener('click',async()=>{
       const btn=$('runBackup'),message=$('backupMessage'),progress=$('backupProgress');btn.disabled=true;msg(message,'');progress.textContent='جارٍ تجهيز النسخة…';
