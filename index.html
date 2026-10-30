@@ -51,7 +51,7 @@
   const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_u6mAjtA5nkFWfc47AeKfDw_6_3Kj_u2';
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
   const $ = id => document.getElementById(id);
-  const state = {user:null, profile:null, departments:[], managerDepartments:[], staff:[], page:'overview', patients:[], appointments:[], finances:[], selectedDepartment:null, financeOffset:0, financeHasMore:false, financeYear:new Date().getFullYear(), financeMonth:new Date().getMonth(), managementDate:null, managementMonth:null};
+  const state = {user:null, profile:null, departments:[], managerDepartments:[], staff:[], page:'overview', patients:[], appointments:[], finances:[], selectedDepartment:null, financeOffset:0, financeHasMore:false, financeYear:new Date().getFullYear(), financeMonth:new Date().getMonth(), managementDate:null, managementMonth:null, calendarDate:null};
   const roleNames = {admin:'مدير إداري', secretary:'سكرتارية', receptionist:'سكرتارية', accountant:'محاسب', technical_manager:'مدير قسم', therapist:'دكتور / معالج'};
   const deptFallback = [
     ['pediatric_pt','العلاج الطبيعي للأطفال'],['sensory_integration','التكامل الحسي'],['skills','المهارات'],['occupational_therapy','العلاج الوظيفي'],['speech_therapy','التخاطب'],['therapeutic_nutrition','التغذية العلاجية'],['adult_male_pt','العلاج الطبيعي للكبار - رجال'],['adult_female_pt','العلاج الطبيعي للكبار - سيدات'],['hydrotherapy','العلاج المائي']
@@ -356,56 +356,67 @@
   }
   async function appointmentsPage(){
     if(!isRole('admin','secretary','technical_manager','therapist')){setPage('المواعيد والجلسات','<div class="notice error">غير مصرح لك بفتح جداول المواعيد.</div>');return;}
-    setPage('المواعيد والجلسات','<div class="empty">جارٍ تحميل جداول الأقسام والدكاترة…</div>',isRole('admin','secretary')?'<button class="btn" id="addApptBtn" type="button">+ إضافة موعد</button>':'');
-    $('addApptBtn')?.addEventListener('click',()=>appointmentForm());
-    let q=sb.from('appointments').select('id,patient_id,department_id,therapist_id,appointment_at,duration_minutes,status,notes,appointment_type,package_id,patients(full_name)').order('appointment_at',{ascending:true}).limit(500);
-    if(state.profile.role==='technical_manager'&&state.managerDepartments.length)q=q.in('department_id',state.managerDepartments);if(state.profile.role==='therapist')q=q.eq('therapist_id',state.user.id);
-    const {data,error}=await q;if(error){$('sectionBody').innerHTML=`<div class="notice error">تعذر تحميل المواعيد: ${esc(error.message)}</div>`;return;}
-    state.appointments=data||[];
+    const selectedDate=state.calendarDate||cairoDateString();
+    const [yy,mm]=selectedDate.split('-').map(Number);
+    const monthStart=`${yy}-${String(mm).padStart(2,'0')}-01`;
+    const nextMonthDate=new Date(yy,mm,1);
+    const monthEnd=`${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth()+1).padStart(2,'0')}-01`;
+    const from=cairoDayBounds(monthStart).start;
+    const to=cairoDayBounds(monthEnd).start;
+    setPage('المواعيد والجلسات','<div class="empty">جارٍ تحميل جدول اليوم…</div>',isRole('admin','secretary')?'<button class="btn" id="addApptBtn" type="button">+ إضافة موعد</button>':'');
+    let q=sb.from('appointments').select('id,patient_id,department_id,therapist_id,appointment_at,duration_minutes,status,notes,appointment_type,package_id,patients(full_name)').gte('appointment_at',from).lt('appointment_at',to).order('appointment_at',{ascending:true}).limit(3000);
+    if(state.profile.role==='technical_manager'&&state.managerDepartments.length)q=q.in('department_id',state.managerDepartments);
+    if(state.profile.role==='therapist')q=q.eq('therapist_id',state.user.id);
+    const [apptRes,reviewRes]=await Promise.all([q,sb.from('sanad_monthly_schedule_reviews').select('month_start,status,reviewed_at,reviewed_by').eq('month_start',monthStart).maybeSingle()]);
+    if(apptRes.error){$('sectionBody').innerHTML=`<div class="notice error">تعذر تحميل المواعيد: ${esc(apptRes.error.message)}</div>`;return;}
+    state.appointments=apptRes.data||[];
+    const review=reviewRes.data||null, archived=review?.status==='reviewed';
     const depts=allowedDepartments();
     const therapistOptions=state.staff.filter(x=>!['admin','secretary','receptionist','accountant'].includes(x.role));
-    $('sectionBody').innerHTML=`<div class="toolbar" style="margin-bottom:12px"><button class="btn" id="openScheduleSheet" type="button">+ توزيع جدول دكتور (شيت)</button><span class="muted small">جدول أسبوعي حسب الدكتور والقسم مع منع تداخل مواعيد الدكتور.</span></div><div class="schedule-filters"><input id="scheduleAnchorDate" type="date" value="${cairoDateString()}" aria-label="التاريخ المرجعي للجدول"><select id="scheduleView"><option value="all">كل المواعيد</option><option value="today">جدول اليوم</option><option value="week">هذا الأسبوع (قائمة)</option><option value="week_grid">تقويم أسبوعي</option><option value="month">هذا الشهر</option></select><select id="scheduleDept"><option value="all">كل الأقسام</option>${depts.map(d=>`<option value="${esc(d.id)}">قسم: ${esc(d.name)}</option>`).join('')}</select><select id="scheduleTherapist"><option value="all">كل الدكاترة</option>${therapistOptions.map(t=>`<option value="${esc(t.user_id)}">د. ${esc(t.full_name)}</option>`).join('')}</select><input id="schedulePatientSearch" type="search" placeholder="ابحث عن المريض بالاسم…"></div><div id="scheduleSummary" class="muted small" style="margin-bottom:10px"></div><div id="scheduleTable"></div>`;
+    const canSchedule=isRole('admin','secretary')&&!archived;
+    $('sectionBody').innerHTML=`<div class="toolbar" style="margin-bottom:12px;justify-content:space-between"><div class="toolbar"><button class="btn secondary" id="prevScheduleDay" type="button">اليوم السابق ‹</button><button class="btn ghost" id="todaySchedule" type="button">اليوم</button><button class="btn secondary" id="nextScheduleDay" type="button">› اليوم التالي</button><label class="small">التاريخ <input id="scheduleAnchorDate" type="date" value="${selectedDate}"></label></div>${canSchedule?'<button class="btn" id="openScheduleSheet" type="button">+ توزيع جدول دكتور (شيت)</button>':''}</div><div class="schedule-filters"><select id="scheduleDept"><option value="all">كل الأقسام</option>${depts.map(d=>`<option value="${esc(d.id)}">قسم: ${esc(d.name)}</option>`).join('')}</select><select id="scheduleTherapist"><option value="all">كل الدكاترة</option>${therapistOptions.map(t=>`<option value="${esc(t.user_id)}">د. ${esc(t.full_name)}</option>`).join('')}</select><input id="schedulePatientSearch" type="search" placeholder="ابحث عن المريض بالاسم…"></div><div id="scheduleArchiveStatus" class="analysis-note">${archived?`<strong>الشهر مؤرشف ومعتمد للمراجعة.</strong> الجدول محفوظ للقراءة فقط منذ ${esc(review.reviewed_at?dateTime(review.reviewed_at):'تاريخ الاعتماد')}.`:`<strong>الشهر ${monthStart.slice(0,7)} غير مؤرشف.</strong> المواعيد محفوظة ويمكن الرجوع لأي يوم خلال الشهر.`}${reviewRes.error?`<br>تعذر قراءة حالة الأرشفة: ${esc(reviewRes.error.message)}`:''}</div><div id="scheduleSummary" class="muted small" style="margin-bottom:10px"></div><div id="scheduleTable"></div>`;
+    function cairoDay(value){return new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Cairo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));}
     function renderSchedule(){
-      const view=$('scheduleView').value,dept=$('scheduleDept').value,therapist=$('scheduleTherapist').value;let rows=state.appointments.slice();
+      const dept=$('scheduleDept').value,therapist=$('scheduleTherapist').value,day=$('scheduleAnchorDate').value;
+      let rows=state.appointments.filter(a=>cairoDay(a.appointment_at)===day);
       if(dept!=='all')rows=rows.filter(a=>a.department_id===dept);
       if(therapist!=='all')rows=rows.filter(a=>a.therapist_id===therapist);
       const patientTerm=($('schedulePatientSearch')?.value||'').trim().toLocaleLowerCase('ar');
       if(patientTerm)rows=rows.filter(a=>(a.patients?.full_name||'').toLocaleLowerCase('ar').includes(patientTerm));
-      const anchorValue=$('scheduleAnchorDate')?.value||cairoDateString(),anchorDate=new Date(anchorValue+'T12:00:00'),now=anchorDate,today=new Date(anchorDate.getFullYear(),anchorDate.getMonth(),anchorDate.getDate());
-      if(view==='today')rows=rows.filter(a=>{const d=new Date(a.appointment_at);return d>=today&&d<new Date(today.getTime()+86400000)});
-      if(view==='week'){const day=(today.getDay()+6)%7;const from=new Date(today);from.setDate(today.getDate()-day);const to=new Date(from);to.setDate(from.getDate()+7);rows=rows.filter(a=>new Date(a.appointment_at)>=from&&new Date(a.appointment_at)<to);}
-      if(view==='month')rows=rows.filter(a=>{const d=new Date(a.appointment_at);return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth()});
-      $('scheduleSummary').textContent=`عدد المواعيد المعروضة: ${rows.length} — يتحدّث جدول القسم وجدول الدكتور تلقائيًا من نفس سجل الموعد.`;
-      if(view==='week_grid'){
-        const day=(today.getDay()+6)%7,from=new Date(today);from.setDate(today.getDate()-day);from.setHours(0,0,0,0);
-        const days=Array.from({length:7},(_,i)=>{const d=new Date(from);d.setDate(from.getDate()+i);return d;});
-        $('scheduleTable').innerHTML=`<div class="calendar-week">${days.map(d=>{const key=d.toDateString(),dayRows=rows.filter(a=>new Date(a.appointment_at).toDateString()===key).sort((a,b)=>new Date(a.appointment_at)-new Date(b.appointment_at));return `<section class="calendar-day ${d.toDateString()===today.toDateString()?'today':''}"><h4><span>${d.toLocaleDateString('ar-EG',{weekday:'long'})}</span><span>${d.toLocaleDateString('ar-EG',{day:'numeric',month:'numeric'})}</span></h4>${dayRows.length?dayRows.map(a=>{const dt=new Date(a.appointment_at),end=new Date(dt.getTime()+Number(a.duration_minutes||45)*60000);return `<article class="calendar-event ${a.status==='cancelled'?'cancelled':''}"><strong>${dt.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})} – ${end.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})}</strong>${esc(a.patients?.full_name||'مريض غير محدد')}<br>${esc(staffName(a.therapist_id))}<br><span class="muted">${esc(deptName(a.department_id))} · ${esc(statusName(a.status))}</span>${isRole('admin','secretary')?`<br><button class="btn secondary" data-edit-appt="${esc(a.id)}" type="button">تعديل</button>`:''}</article>`;}).join(''):'<div class="muted small">لا توجد حالات</div>'}</section>`;}).join('')}</div>`;
-        $('scheduleTable').querySelectorAll('[data-edit-appt]').forEach(b=>b.addEventListener('click',()=>appointmentForm(b.dataset.editAppt)));
-        return;
-      }
-      $('scheduleTable').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>التاريخ والوقت</th><th>المريض</th><th>القسم</th><th>الدكتور / المعالج</th><th>المدة</th><th>النوع</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody>${rows.map(a=>`<tr><td>${dateTime(a.appointment_at)}</td><td>${esc(a.patients?.full_name||'—')}</td><td>${esc(deptName(a.department_id))}</td><td>${esc(staffName(a.therapist_id))}</td><td>${esc(a.duration_minutes??45)} دقيقة</td><td>${a.appointment_type==='assessment'?'كشف':'جلسة علاجية'}</td><td><span class="badge ${a.status==='cancelled'?'cancelled':a.status==='pending'?'pending':''}">${esc(statusName(a.status))}</span></td><td><div class="toolbar">${isRole('admin','secretary')?`${a.status!=='completed'&&a.status!=='cancelled'&&a.appointment_type==='assessment'?`<button class="btn secondary" data-complete-assessment="${esc(a.id)}" type="button">تأكيد إتمام الكشف</button>`:''}${a.status!=='completed'&&a.status!=='cancelled'&&a.appointment_type!=='assessment'?`<button class="btn secondary" data-record-session="${esc(a.id)}" type="button">تسجيل الجلسة وإتمامها</button>`:''}<button class="btn ghost" data-edit-appt="${esc(a.id)}" type="button">تعديل</button>${a.status!=='cancelled'&&a.status!=='completed'?`<button class="btn danger" data-cancel-appt="${esc(a.id)}" type="button">إلغاء الموعد</button>`:''}`:['technical_manager','therapist'].includes(state.profile.role)&&a.status!=='completed'&&a.status!=='cancelled'&&a.appointment_type!=='assessment'?`<button class="btn secondary" data-record-session="${esc(a.id)}" type="button">تسجيل الجلسة</button>`:'—'}</div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد مواعيد في الفلتر المختار.</div>';
+      rows.sort((a,b)=>new Date(a.appointment_at)-new Date(b.appointment_at));
+      $('scheduleSummary').textContent=`جدول ${new Date(day+'T12:00:00').toLocaleDateString('ar-EG',{weekday:'long',year:'numeric',month:'long',day:'numeric'})} — ${rows.length} موعد — ${new Set(rows.map(a=>a.therapist_id).filter(Boolean)).size} دكتور.`;
+      $('scheduleTable').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>من – إلى</th><th>الدكتور / المعالج</th><th>المريض</th><th>القسم</th><th>المدة</th><th>النوع</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody>${rows.map(a=>{const dt=new Date(a.appointment_at),end=new Date(dt.getTime()+Number(a.duration_minutes||45)*60000);return `<tr><td>${dt.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})} – ${end.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})}</td><td>${esc(staffName(a.therapist_id))}</td><td>${esc(a.patients?.full_name||'—')}</td><td>${esc(deptName(a.department_id))}</td><td>${esc(a.duration_minutes??45)} دقيقة</td><td>${a.appointment_type==='assessment'?'كشف':'جلسة علاجية'}</td><td><span class="badge ${a.status==='cancelled'?'cancelled':a.status==='pending'?'pending':''}">${esc(statusName(a.status))}</span></td><td><div class="toolbar">${isRole('admin','secretary')&&!archived?`${a.status!=='completed'&&a.status!=='cancelled'&&a.appointment_type==='assessment'?`<button class="btn secondary" data-complete-assessment="${esc(a.id)}" type="button">تأكيد إتمام الكشف</button>`:''}${a.status!=='completed'&&a.status!=='cancelled'&&a.appointment_type!=='assessment'?`<button class="btn secondary" data-record-session="${esc(a.id)}" type="button">تسجيل الجلسة وإتمامها</button>`:''}<button class="btn ghost" data-edit-appt="${esc(a.id)}" type="button">تعديل</button>${a.status!=='cancelled'&&a.status!=='completed'?`<button class="btn danger" data-cancel-appt="${esc(a.id)}" type="button">إلغاء</button>`:''}`:['technical_manager','therapist'].includes(state.profile.role)&&!archived&&a.status!=='completed'&&a.status!=='cancelled'&&a.appointment_type!=='assessment'?`<button class="btn secondary" data-record-session="${esc(a.id)}" type="button">تسجيل الجلسة</button>`:'—'}</div></td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty">لا توجد مواعيد في هذا اليوم حسب الفلاتر المختارة.</div>';
       $('scheduleTable').querySelectorAll('[data-edit-appt]').forEach(b=>b.addEventListener('click',()=>appointmentForm(b.dataset.editAppt)));
       $('scheduleTable').querySelectorAll('[data-record-session]').forEach(b=>b.addEventListener('click',()=>recordTherapySession(b.dataset.recordSession)));
       $('scheduleTable').querySelectorAll('[data-complete-assessment]').forEach(b=>b.addEventListener('click',()=>completeAssessment(b.dataset.completeAssessment)));
       $('scheduleTable').querySelectorAll('[data-cancel-appt]').forEach(b=>b.addEventListener('click',()=>cancelAppointment(b.dataset.cancelAppt)));
     }
-    ['scheduleView','scheduleDept','scheduleTherapist','scheduleAnchorDate'].forEach(id=>$(id).addEventListener('change',renderSchedule));$('openScheduleSheet')?.addEventListener('click',bulkSchedulePage);$('schedulePatientSearch').addEventListener('input',renderSchedule);renderSchedule();
-    $('sectionActions').innerHTML=isRole('admin','secretary')?'<button class="btn" id="addApptBtn" type="button">+ إضافة موعد</button>':'';$('addApptBtn')?.addEventListener('click',()=>appointmentForm());
+    const changeDay=async value=>{if(!value)return;state.calendarDate=value;await appointmentsPage();};
+    $('scheduleAnchorDate').addEventListener('change',e=>changeDay(e.target.value));
+    $('prevScheduleDay').addEventListener('click',()=>{const d=new Date($('scheduleAnchorDate').value+'T12:00:00');d.setDate(d.getDate()-1);changeDay(cairoDateString(d));});
+    $('nextScheduleDay').addEventListener('click',()=>{const d=new Date($('scheduleAnchorDate').value+'T12:00:00');d.setDate(d.getDate()+1);changeDay(cairoDateString(d));});
+    $('todaySchedule').addEventListener('click',()=>changeDay(cairoDateString()));
+    ['scheduleDept','scheduleTherapist'].forEach(id=>$(id).addEventListener('change',renderSchedule));$('schedulePatientSearch').addEventListener('input',renderSchedule);
+    $('openScheduleSheet')?.addEventListener('click',bulkSchedulePage);
+    renderSchedule();
+    $('sectionActions').innerHTML=isRole('admin','secretary')&&!archived?'<button class="btn" id="addApptBtn" type="button">+ إضافة موعد</button>':'';$('addApptBtn')?.addEventListener('click',()=>appointmentForm());
   }
   async function bulkSchedulePage(){
     if(!isRole('admin','secretary')){setPage('توزيع جدول الدكتور','<div class="notice error">توزيع المواعيد متاح للمدير الإداري والسكرتارية فقط.</div>');return;}
     setPage('توزيع جدول الدكتور','<div class="empty">جارٍ تجهيز شيت توزيع الحالات…</div>');
-    const [pRes,linkRes,apptRes]=await Promise.all([
+    const initialDay=state.calendarDate||cairoDateString();
+    const [pRes,linkRes]=await Promise.all([
       sb.from('patients').select('id,full_name,department_id').eq('is_active',true).order('full_name').limit(1500),
-      sb.from('patient_departments').select('patient_id,department_id'),
-      sb.from('appointments').select('id,patient_id,department_id,therapist_id,appointment_at,duration_minutes,status,appointment_type,patients(full_name)').gte('appointment_at',new Date(Date.now()-86400000).toISOString()).lt('appointment_at',new Date(Date.now()+14*86400000).toISOString()).neq('status','cancelled').limit(2000)
+      sb.from('patient_departments').select('patient_id,department_id')
     ]);
-    if(pRes.error||linkRes.error||apptRes.error){setPage('توزيع جدول الدكتور',`<div class="notice error">تعذر تجهيز الشيت: ${esc(pRes.error?.message||linkRes.error?.message||apptRes.error?.message)}</div>`);return;}
-    const patients=pRes.data||[],links=linkRes.data||[],existing=apptRes.data||[];
+    if(pRes.error||linkRes.error){setPage('توزيع جدول الدكتور',`<div class="notice error">تعذر تجهيز الشيت: ${esc(pRes.error?.message||linkRes.error?.message)}</div>`);return;}
+    const patients=pRes.data||[],links=linkRes.data||[];let existing=[];
+    async function loadExistingForDay(day){const [y,m]=day.split('-').map(Number);const a=cairoDayBounds(`${y}-${String(m).padStart(2,'0')}-01`).start;const next=new Date(y,m,1);const b=cairoDayBounds(`${next.getFullYear()}-${String(next.getMonth()+1).padStart(2,'0')}-01`).start;const r=await sb.from('appointments').select('id,patient_id,department_id,therapist_id,appointment_at,duration_minutes,status,appointment_type,patients(full_name)').gte('appointment_at',a).lt('appointment_at',b).neq('status','cancelled').limit(3000);if(r.error)throw r.error;existing=r.data||[];}
     const doctors=state.staff.filter(x=>['technical_manager','therapist'].includes(x.role));
     const depts=allowedDepartments();
     if(!doctors.length){setPage('توزيع جدول الدكتور','<div class="notice error">لا توجد حسابات دكاترة/معالجين نشطة في ملفات الموظفين. اربط حساب الدكتور أولًا من صفحة حسابات الموظفين.</div>');return;}
-    const date=cairoDateString();
+    const date=initialDay;
+    try{await loadExistingForDay(date);}catch(e){setPage('توزيع جدول الدكتور',`<div class="notice error">تعذر تحميل تعارضات اليوم: ${esc(e.message)}</div>`);return;}
     const patientOptions=patients.map(p=>`<option value="${esc(p.id)}">${esc(p.full_name)}</option>`).join('');
     const deptOptions=depts.map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('');
     const doctorOptions=doctors.map(d=>`<option value="${esc(d.user_id)}">د. ${esc(d.full_name)}</option>`).join('');
@@ -423,7 +434,7 @@
       attachPatientSelectSearch(wrap.querySelector('[data-patient]'));updateCount();
     };
     const updateCount=()=>$('sheetCount').textContent=`${$('sheetRows').children.length} حالات في الشيت`;
-    addRow();addRow();$('addSheetRow').addEventListener('click',()=>addRow());$('backSchedule').addEventListener('click',appointmentsPage);
+    addRow();addRow();$('addSheetRow').addEventListener('click',()=>addRow());$('backSchedule').addEventListener('click',appointmentsPage);$('sheetDate').addEventListener('change',async()=>{try{await loadExistingForDay($('sheetDate').value);}catch(e){msg($('sheetMessage'),'تعذر تحديث مواعيد اليوم: '+e.message);}});
     $('saveScheduleSheet').addEventListener('click',async()=>{
       const doctorId=$('sheetDoctor').value,day=$('sheetDate').value,items=[...$('sheetRows').children];
       if(!doctorId||!day||!items.length){msg($('sheetMessage'),'اختر الدكتور والتاريخ وأضف حالة واحدة على الأقل.');return;}
@@ -611,7 +622,21 @@
       if(result.error){$('sectionBody').innerHTML=`<div class="notice error">تعذر تحميل السجلات المالية: ${esc(result.error.message)}</div>`;return;}
       const batch=result.data||[];rows=rows.concat(batch);offset+=batch.length;hasMore=batch.length===1000;
     }
-    state.finances=rows;renderFinancesTable(month);
+    state.finances=rows;renderFinancesTable(month);await renderFinanceScheduleArchiveControl();
+  }
+  async function renderFinanceScheduleArchiveControl(){
+    if(state.profile.role!=='accountant'||state.financeMonth<0)return;
+    const year=Number(state.financeYear),month=Number(state.financeMonth)+1;
+    const monthStart=`${year}-${String(month).padStart(2,'0')}-01`;
+    const currentMonth=`${cairoDateString().slice(0,7)}-01`;
+    const {data,error}=await sb.from('sanad_monthly_schedule_reviews').select('month_start,status,reviewed_at').eq('month_start',monthStart).maybeSingle();
+    const box=document.createElement('div');box.className='analysis-note';
+    if(error){box.textContent='تعذر تحميل حالة أرشفة جدول الشهر: '+error.message;}
+    else if(data?.status==='reviewed'){box.innerHTML=`<strong>جدول هذا الشهر مؤرشف ومعتمد.</strong> محفوظ للرجوع إليه للقراءة فقط منذ ${esc(dateTime(data.reviewed_at))}.`;}
+    else if(monthStart<currentMonth){box.innerHTML=`<strong>مراجعة جدول ${monthStart.slice(0,7)}.</strong> بعد الانتهاء من مراجعة الحسابات، يمكنك اعتماد الشهر وأرشفة جدول مواعيده للقراءة فقط. <button class="btn" id="approveScheduleArchive" type="button">اعتماد المراجعة وأرشفة الجدول</button>`;}
+    else{box.textContent='أرشفة جدول المواعيد متاحة بعد انتهاء الشهر، عند مراجعة الحسابات في الشهر التالي.';}
+    $('sectionBody').prepend(box);
+    $('approveScheduleArchive')?.addEventListener('click',async()=>{if(!confirm(`هل انتهيت من مراجعة حسابات شهر ${monthStart.slice(0,7)} وتريد أرشفة جدول مواعيده؟ لن يمكن تعديل مواعيد هذا الشهر بعد الاعتماد.`))return;const b=$('approveScheduleArchive');b.disabled=true;const result=await sb.rpc('sanad_review_schedule_month',{p_month:monthStart});if(result.error){b.disabled=false;alert('تعذر اعتماد الشهر: '+result.error.message);return;}alert('تم اعتماد الشهر وأرشفة جدول مواعيده للقراءة فقط.');await financesPage();});
   }
   function makeBars(items, valueKey, labelKey, type='income', compact=false){
     const max=Math.max(1,...items.map(x=>Number(x[valueKey]||0)));
