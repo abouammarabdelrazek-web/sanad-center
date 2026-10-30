@@ -606,11 +606,13 @@
         if(type==='therapy'&&(!Number.isFinite(sessionPrice)||sessionPrice<0)){msg(message,'أدخل سعر جلسة صحيحًا.');return;}
         const appointmentDate=new Date(appointmentValue);
         if(Number.isNaN(appointmentDate.getTime())){msg(message,'التاريخ والوقت غير صحيحين.');return;}
+        const appointmentEndDate=new Date(appointmentDate.getTime()+duration*60000);
         const payload={
           patient_id:patientId,
           department_id:departmentId,
           therapist_id:f.get('therapist_id')||null,
           appointment_at:appointmentDate.toISOString(),
+          appointment_end_at:appointmentEndDate.toISOString(),
           duration_minutes:duration,
           status,
           notes:f.get('notes')||null,
