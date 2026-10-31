@@ -534,7 +534,7 @@
     const depts=allowedDepartments();
     const localDate=existing?new Date(new Date(existing.appointment_at).getTime()-new Date(existing.appointment_at).getTimezoneOffset()*60000).toISOString().slice(0,16):'';
     const apptType=existing?.appointment_type||'therapy';
-    setPage(editId?'تعديل الموعد':'إضافة موعد',`<form id="apptForm"><div class="form-grid"><div class="field span-2"><label>المريض *</label><select name="patient_id" required><option value="">اختر المريض</option>${patients.map(p=>`<option value="${esc(p.id)}" ${p.id===existing?.patient_id?'selected':''}>${esc(p.full_name)}</option>`).join('')}</select></div><div class="field"><label>القسم *</label><select name="department_id" required>${depts.map(d=>`<option value="${esc(d.id)}" ${d.id===(existing?.department_id||state.profile.department_id)?'selected':''}>${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label>نوع الموعد *</label><select name="appointment_type"><option value="assessment" ${apptType==='assessment'?'selected':''}>كشف / تقييم أولي</option><option value="therapy" ${apptType==='therapy'?'selected':''}>جلسة علاجية</option></select></div><div class="field span-2"><label>الباقة المرتبطة (اختياري)</label><select name="package_id" id="appointmentPackage"><option value="">بدون باقة — جلسة فردية</option></select><small class="muted">عند تأكيد جلسة الباقة يُخصم استهلاك جلسة واحدة فقط، دون تسجيل إيراد مكرر.</small></div><div class="field"><label>سعر الجلسة (ج.م) *</label><input name="session_price" type="number" min="0" step="0.01" value="${esc(existing?.session_price??'')}"></div><div class="field"><label>التاريخ والوقت *</label><input name="appointment_at" type="datetime-local" value="${esc(localDate)}" required></div><div class="field"><label>المعالج المسؤول</label><select name="therapist_id" id="appointmentTherapist"><option value="">لم يحدد</option>${state.therapists.filter(x=>x.department_ids.includes(existing?.department_id||depts[0]?.id||state.profile?.department_id)).map(x=>`<option value="${esc(x.id)}" ${x.id===existing?.therapist_id?'selected':''}>${esc(x.full_name)}${x.job_title?' — '+esc(x.job_title):''}</option>`).join('')}</select></div><div class="field"><label>المدة بالدقائق *</label><input name="duration" type="number" min="5" max="240" value="${esc(existing?.duration_minutes??'')}" required><small class="muted" id="durationHint">تُحمّل المدة الافتراضية من إعدادات المريض والقسم.</small></div><div class="field"><label>الحالة</label><select name="status" ${existing?.status==='completed'?'disabled':''}>${[['scheduled','مجدول'],['cancelled','ملغي'],['no_show','لم يأخذ الجلسة']].map(([v,l])=>`<option value="${v}" ${(existing?.status||'scheduled')===v?'selected':''}>${l}</option>`).join('')}</select><small class="muted">إتمام الجلسة يتم من زر التأكيد في الكلندر فقط.</small></div><div class="field span-2"><label>ملاحظات</label><textarea name="notes">${esc(existing?.notes||'')}</textarea></div></div><div class="toolbar"><button class="btn" type="button" id="saveAppointmentBtn">${editId?'حفظ التعديلات':'حفظ الموعد'}</button><button class="btn ghost" id="cancelAppt" type="button">رجوع</button></div><div id="apptMessage"></div></form>`);
+    setPage(editId?'تعديل الموعد':'إضافة موعد',`<form id="apptForm"><div class="form-grid"><div class="field span-2"><label>المريض *</label><select name="patient_id" required><option value="">اختر المريض</option>${patients.map(p=>`<option value="${esc(p.id)}" ${p.id===existing?.patient_id?'selected':''}>${esc(p.full_name)}</option>`).join('')}</select></div><div class="field"><label>القسم *</label><select name="department_id" required>${depts.map(d=>`<option value="${esc(d.id)}" ${d.id===(existing?.department_id||state.profile.department_id)?'selected':''}>${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label>نوع الموعد *</label><select name="appointment_type"><option value="assessment" ${apptType==='assessment'?'selected':''}>كشف / تقييم أولي</option><option value="therapy" ${apptType==='therapy'?'selected':''}>جلسة علاجية</option></select></div><div class="field span-2"><label>الباقة المرتبطة (اختياري)</label><select name="package_id" id="appointmentPackage"><option value="">بدون باقة — جلسة فردية</option></select><small class="muted">عند تأكيد جلسة الباقة يُخصم استهلاك جلسة واحدة فقط، دون تسجيل إيراد مكرر.</small></div><div class="field"><label>سعر الجلسة (ج.م) *</label><input name="session_price" type="number" min="0" step="0.01" value="${esc(existing?.session_price??'')}"></div><div class="field"><label>التاريخ والوقت *</label><input name="appointment_at" type="datetime-local" value="${esc(localDate)}" required></div><div class="field"><label>المعالج المسؤول *</label><select name="therapist_id" id="appointmentTherapist" required><option value="">اختر المعالج</option>${state.therapists.filter(x=>x.department_ids.includes(existing?.department_id||depts[0]?.id||state.profile?.department_id)).map(x=>`<option value="${esc(x.id)}" ${x.id===existing?.therapist_id?'selected':''}>${esc(x.full_name)}${x.job_title?' — '+esc(x.job_title):''}</option>`).join('')}</select></div><div class="field"><label>المدة بالدقائق *</label><input name="duration" type="number" min="5" max="240" value="${esc(existing?.duration_minutes??'')}" required><small class="muted" id="durationHint">تُحمّل المدة الافتراضية من إعدادات المريض والقسم.</small></div><div class="field"><label>الحالة</label><select name="status" ${existing?.status==='completed'?'disabled':''}>${[['scheduled','مجدول'],['cancelled','ملغي'],['no_show','لم يأخذ الجلسة']].map(([v,l])=>`<option value="${v}" ${(existing?.status||'scheduled')===v?'selected':''}>${l}</option>`).join('')}</select><small class="muted">إتمام الجلسة يتم من زر التأكيد في الكلندر فقط.</small></div><div class="field span-2"><label>ملاحظات</label><textarea name="notes">${esc(existing?.notes||'')}</textarea></div></div><div class="toolbar"><button class="btn" type="button" id="saveAppointmentBtn">${editId?'حفظ التعديلات':'حفظ الموعد'}</button><button class="btn ghost" id="cancelAppt" type="button">رجوع</button></div><div id="apptMessage"></div></form>`);
     const refreshPackages=async()=>{
       const patientId=$('apptForm').elements.patient_id.value,departmentId=$('apptForm').elements.department_id.value;
       const select=$('appointmentPackage');const keep=select.value||existing?.package_id||'';
@@ -554,7 +554,7 @@
       const deptId=$('apptForm').elements.department_id.value;
       const current=select.value;
       const options=state.therapists.filter(x=>x.department_ids.includes(deptId));
-      select.innerHTML='<option value="">لم يحدد</option>'+options.map(x=>`<option value="${esc(x.id)}">${esc(x.full_name)}${x.job_title?' — '+esc(x.job_title):''}</option>`).join('');
+      select.innerHTML='<option value="">اختر المعالج</option>'+options.map(x=>`<option value="${esc(x.id)}">${esc(x.full_name)}${x.job_title?' — '+esc(x.job_title):''}</option>`).join('');
       if(options.some(x=>x.id===current))select.value=current;
     });
     $('apptForm').elements.patient_id.addEventListener('change',()=>refreshAppointmentDuration());
@@ -608,6 +608,7 @@
         const departmentId=String(f.get('department_id')||'');
         const appointmentValue=String(f.get('appointment_at')||'');
         if(!patientId||!departmentId||!appointmentValue){msg(message,'أكمل اختيار المريض والقسم والتاريخ والوقت.');return;}
+        if(!String(f.get('therapist_id')||'')){msg(message,'اختر المعالج المسؤول قبل الحفظ؛ بدونه لن يظهر الموعد في جدول أي دكتور ولا يمكن فحص التعارض.');return;}
         const link=await sb.from('patient_departments').select('department_id').eq('patient_id',patientId).eq('department_id',departmentId).maybeSingle();
         if(link.error)throw new Error('تعذر التحقق من ارتباط المريض بالقسم: '+link.error.message);
         const selectedPatient=patients.find(p=>p.id===patientId);
@@ -635,6 +636,27 @@
           package_id:f.get('package_id')||null,
           session_price:type==='therapy'?sessionPrice:null
         };
+        if(payload.status!=='cancelled'){
+          const fmtT=v=>new Date(v).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'});
+          let tq=sb.from('sanad_calendar_appointments').select('id,appointment_at,appointment_end_at,patients(full_name)').eq('therapist_id',payload.therapist_id).neq('status','cancelled').lt('appointment_at',payload.appointment_end_at).gt('appointment_end_at',payload.appointment_at).limit(1);
+          if(editId)tq=tq.neq('id',editId);
+          const therapistClash=await tq;
+          if(therapistClash.error)throw new Error('تعذر فحص تعارض مواعيد المعالج: '+therapistClash.error.message);
+          if(therapistClash.data?.length){
+            const c=therapistClash.data[0];
+            msg(message,`المعالج عنده موعد في نفس الوقت (${fmtT(c.appointment_at)} – ${fmtT(c.appointment_end_at)}) للمريض ${c.patients?.full_name||'—'}. اختر وقتًا آخر أو معالجًا آخر.`);
+            return;
+          }
+          let pq=sb.from('sanad_calendar_appointments').select('id,appointment_at,appointment_end_at').eq('patient_id',payload.patient_id).neq('status','cancelled').lt('appointment_at',payload.appointment_end_at).gt('appointment_end_at',payload.appointment_at).limit(1);
+          if(editId)pq=pq.neq('id',editId);
+          const patientClash=await pq;
+          if(patientClash.error)throw new Error('تعذر فحص تعارض مواعيد المريض: '+patientClash.error.message);
+          if(patientClash.data?.length){
+            const c=patientClash.data[0];
+            msg(message,`المريض عنده موعد آخر في نفس الوقت (${fmtT(c.appointment_at)} – ${fmtT(c.appointment_end_at)}). عدّل الوقت.`);
+            return;
+          }
+        }
         if(!editId)payload.created_by=sessionData.session.user.id;
         let savedId=null;
         if(editId){
@@ -663,6 +685,7 @@
           if(!result.data?.id)throw new Error('لم تُرجع قاعدة البيانات رقم الموعد بعد الحفظ؛ لم يتم تأكيد نجاح العملية.');
           savedId=result.data.id;
         }
+        state.calendarDate=cairoDateString(appointmentDate);
         msg(message,editId?'تم تحديث الموعد بنجاح.':'تم تسجيل الموعد بنجاح.','success');
         setTimeout(()=>appointmentsPage(),900);
       }catch(error){
