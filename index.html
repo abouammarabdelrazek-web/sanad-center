@@ -557,7 +557,7 @@
       select.innerHTML='<option value="">لم يحدد</option>'+options.map(x=>`<option value="${esc(x.id)}">${esc(x.full_name)}${x.job_title?' — '+esc(x.job_title):''}</option>`).join('');
       if(options.some(x=>x.id===current))select.value=current;
     });
-    $('apptForm').elements.patient_id.addEventListener('change',refreshAppointmentDuration);
+    $('apptForm').elements.patient_id.addEventListener('change',()=>refreshAppointmentDuration());
     const refreshAppointmentDuration=async()=>{
       const patientId=$('apptForm').elements.patient_id.value,departmentId=$('apptForm').elements.department_id.value;
       if(existing && patientId===existing.patient_id && departmentId===existing.department_id){$('durationHint').textContent='المدة المحفوظة لهذا الموعد.';return;}
