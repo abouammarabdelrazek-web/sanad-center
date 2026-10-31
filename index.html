@@ -506,7 +506,7 @@
       if(conflicts.length){msg($('sheetMessage'),`فيه تعارض زمني للدكتور في السطور: ${conflicts.join('، ')}. عدّل الأوقات قبل الحفظ.`);return;}
       const btn=$('saveScheduleSheet');btn.disabled=true;msg($('sheetMessage'),'جارٍ حفظ المواعيد بالترتيب…','success');const saved=[],failed=[];
       for(const a of prepared){
-        const payload={patient_id:a.patientId,department_id:a.departmentId,therapist_id:doctorId,appointment_at:a.start.toISOString(),duration_minutes:a.duration,status:'scheduled',appointment_type:a.type,session_price:a.type==='therapy'?a.sessionPrice:null,created_by:state.user.id};
+        const payload={patient_id:a.patientId,department_id:a.departmentId,therapist_id:doctorId,appointment_at:a.start.toISOString(),duration_minutes:a.duration,appointment_end_at:a.end.toISOString(),status:'scheduled',appointment_type:a.type,session_price:a.type==='therapy'?a.sessionPrice:null,created_by:state.user.id};
         const result=await sb.from('sanad_calendar_appointments').insert(payload).select('id').single();
         if(result.error)failed.push({row:a.rowNo,patient:a.patientName,error:result.error.message});else saved.push({id:result.data.id,...a});
       }
@@ -628,6 +628,7 @@
           therapist_id:f.get('therapist_id')||null,
           appointment_at:appointmentDate.toISOString(),
           duration_minutes:duration,
+          appointment_end_at:new Date(appointmentDate.getTime()+duration*60000).toISOString(),
           status:f.get('status')||existing?.status||'scheduled',
           notes:f.get('notes')||null,
           appointment_type:type,
@@ -642,7 +643,7 @@
           const updateResult=await sb.from('sanad_calendar_appointments').update(payload).eq('id',editId);
           if(updateResult.error)throw new Error('فشل تحديث الموعد: '+updateResult.error.message);
           const verifyResult=await sb.from('sanad_calendar_appointments')
-            .select('id,patient_id,department_id,therapist_id,appointment_at,duration_minutes,status,notes,appointment_type,package_id,session_price')
+            .select('id,patient_id,department_id,therapist_id,appointment_at,appointment_end_at,duration_minutes,status,notes,appointment_type,package_id,session_price')
             .eq('id',editId).maybeSingle();
           if(verifyResult.error)throw new Error('تم إرسال التعديل لكن تعذر التحقق منه: '+verifyResult.error.message);
           const saved=verifyResult.data;
@@ -651,7 +652,7 @@
           const samePrice=type==='therapy' ? Number(saved.session_price)===sessionPrice : saved.session_price==null;
           const matches=saved.patient_id===patientId && saved.department_id===departmentId &&
             (saved.therapist_id||null)===(payload.therapist_id||null) && sameTime &&
-            Number(saved.duration_minutes)===duration && saved.status===payload.status &&
+            Number(saved.duration_minutes)===duration && Date.parse(saved.appointment_end_at)===Date.parse(payload.appointment_end_at) && saved.status===payload.status &&
             (saved.notes||null)===(payload.notes||null) && saved.appointment_type===type &&
             (saved.package_id||null)===(payload.package_id||null) && samePrice;
           if(!matches)throw new Error('قاعدة البيانات لم تحفظ كل التعديلات المطلوبة؛ لم يتم اعتماد الحفظ. تأكد من صلاحية UPDATE لهذا الحساب.');
