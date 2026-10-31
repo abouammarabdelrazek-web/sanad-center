@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0f766e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="مركز سند">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>مركز سند | الإدارة</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -27,6 +31,12 @@
 .calendar-simple-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px;background:#f7faf9;border:1px solid var(--line);border-radius:13px;margin-bottom:12px}.calendar-date-nav{display:flex;gap:7px;align-items:center}.calendar-date-nav .btn{min-width:44px}.calendar-date-label{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700}.calendar-date-label input{padding:10px;border:1px solid var(--line);border-radius:9px;background:#fff}.calendar-summary{font-weight:750;margin:14px 2px;color:var(--ink)}.calendar-appointments{display:grid;gap:10px}.calendar-appointment-card{display:grid;grid-template-columns:115px minmax(0,1fr) auto;gap:10px;align-items:start;padding:14px;background:#fff;border:1px solid var(--line);border-radius:13px}.calendar-appointment-time{font-weight:800;color:var(--green2);font-size:14px;padding-top:2px}.calendar-appointment-main strong{font-size:15px}.calendar-appointment-meta{font-size:12px;color:var(--muted);margin-top:5px}.calendar-appointment-status{justify-self:end}.calendar-appointment-actions{grid-column:2/-1;display:flex;gap:6px;flex-wrap:wrap}.calendar-appointment-actions .btn{padding:8px 10px;font-size:12px}
 @media(max-width:600px){.calendar-simple-toolbar{align-items:stretch}.calendar-date-label{justify-content:space-between}.calendar-date-label input{flex:1;max-width:190px}.calendar-appointment-card{grid-template-columns:1fr auto;gap:8px}.calendar-appointment-time{grid-column:1/-1;border-bottom:1px solid var(--line);padding-bottom:8px}.calendar-appointment-main{grid-column:1/-1}.calendar-appointment-status{grid-column:2;grid-row:2}.calendar-appointment-actions{grid-column:1/-1}.calendar-appointment-actions .btn{flex:1}}
 
+
+.calendar-appointment-card.cancelled{opacity:.55;background:#f6f7f7}.calendar-appointment-card.done{border-color:#b7e3d9;background:#f6fcfa}
+.calendar-appointment-actions{align-items:center}.calendar-simple-toolbar .btn.ghost{background:#fff}
+.chart-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:2px 0 12px}.chart-legend div{display:inline-flex;align-items:center;gap:5px}.chart-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.info-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;margin:6px 0 18px}.info-item{background:#f7faf9;border:1px solid var(--line);border-radius:10px;padding:10px 12px}.info-item small{display:block;color:var(--muted);font-size:11px;margin-bottom:3px}.info-item div{font-size:14px;overflow-wrap:anywhere}
+@media(max-width:480px){.info-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -66,6 +76,7 @@
     ['management','▥','لوحة الإدارة والتقارير',['admin']],
     ['patients','♙','المرضى',['admin','secretary','receptionist','technical_manager']],
     ['appointments','▦','المواعيد والجلسات',['admin','secretary','receptionist','technical_manager']],
+    ['bulkSchedule','▤','توزيع جدول دكتور',['admin','secretary','receptionist']],
     ['followup','◎','متابعة المرضى',['admin','secretary','receptionist','technical_manager']],
     ['packages','▣','الباقات والتحصيل',['admin','secretary','receptionist']],
     ['dailyFinance','ج.م','حركة مالية اليوم',['admin','secretary','receptionist']],
@@ -102,6 +113,71 @@
     const input=document.createElement('input'); input.type='search'; input.placeholder='ابحث عن المريض بالاسم أو الهاتف…'; input.className='patient-select-search'; input.style.cssText='width:100%;padding:10px;border:1px solid var(--line);border-radius:9px;margin-bottom:7px';
     select.parentNode.insertBefore(input,select);
     input.addEventListener('input',()=>{const q=input.value.trim().toLocaleLowerCase('ar');[...select.options].forEach((o,i)=>{if(i===0){o.hidden=false;return;}o.hidden=!!q&&!o.textContent.toLocaleLowerCase('ar').includes(q);});});
+  }
+  // ---------- الحذف (للمدير الإداري فقط) ----------
+  function confirmDelete({title,lines=[],word=''}){
+    return new Promise(resolve=>{
+      const wrap=document.createElement('div');
+      wrap.style.cssText='position:fixed;inset:0;background:rgba(15,30,29,.55);z-index:50;display:grid;place-items:center;padding:16px';
+      wrap.innerHTML=`<div role="dialog" aria-modal="true" style="background:#fff;border-radius:16px;max-width:440px;width:100%;padding:20px;box-shadow:var(--shadow)"><h3 style="margin:0 0 10px;color:#991b1b">${esc(title)}</h3>${lines.map(l=>`<p style="margin:6px 0;font-size:13px;line-height:1.8">${esc(l)}</p>`).join('')}<p style="margin:8px 0;font-size:13px;font-weight:700">هذا الإجراء لا يمكن التراجع عنه.</p>${word?`<div class="field" style="margin-top:10px"><label>اكتب «${esc(word)}» للتأكيد</label><input id="confirmDeleteInput" autocomplete="off"></div>`:''}<div class="toolbar" style="margin-top:12px"><button class="btn danger" id="confirmDeleteYes" type="button" ${word?'disabled':''}>حذف نهائي</button><button class="btn ghost" id="confirmDeleteNo" type="button">إلغاء</button></div></div>`;
+      document.body.appendChild(wrap);
+      const done=v=>{wrap.remove();resolve(v);};
+      const yes=wrap.querySelector('#confirmDeleteYes'),input=wrap.querySelector('#confirmDeleteInput');
+      input?.addEventListener('input',()=>{yes.disabled=input.value.trim()!==word;});
+      yes.addEventListener('click',()=>done(true));
+      wrap.querySelector('#confirmDeleteNo').addEventListener('click',()=>done(false));
+      wrap.addEventListener('click',e=>{if(e.target===wrap)done(false);});
+      (input||wrap.querySelector('#confirmDeleteNo')).focus();
+    });
+  }
+  async function deleteRecord(table,column,id){
+    // نطلب الصفوف المحذوفة للتأكد أن الحذف تم فعلًا، لأن RLS قد يرجع نجاحًا بدون حذف أي صف
+    const {data,error}=await sb.from(table).delete().eq(column,id).select(column);
+    if(error){
+      const fk=error.code==='23503'||/foreign key|violates/i.test(error.message||'');
+      return {ok:false,message:fk?'لا يمكن الحذف لأن السجل مرتبط ببيانات أخرى (مواعيد أو باقات أو مدفوعات). احذف السجلات المرتبطة أولًا، أو اكتفِ بتغيير حالة الملف إلى غير نشط.':'تعذر الحذف: '+error.message};
+    }
+    if(!data||!data.length)return {ok:false,message:'لم يتم حذف أي سجل. غالبًا لا توجد صلاحية DELETE لهذا الحساب في سياسات RLS على جدول '+table+'، أو أن السجل محذوف بالفعل.'};
+    return {ok:true};
+  }
+  async function deletePatient(id,name){
+    const [a,k]=await Promise.all([
+      sb.from('sanad_calendar_appointments').select('id',{count:'exact',head:true}).eq('patient_id',id),
+      sb.from('patient_packages').select('id',{count:'exact',head:true}).eq('patient_id',id)
+    ]);
+    const lines=[`سيتم حذف ملف المريض «${name||'—'}» من كل الأقسام.`];
+    if(!a.error&&a.count)lines.push(`لدى المريض ${a.count} موعد/جلسة مسجلة.`);
+    if(!k.error&&k.count)lines.push(`ولديه ${k.count} باقة.`);
+    lines.push('لو كانت له بيانات مرتبطة قد يرفض النظام الحذف، والأفضل وقتها تغيير حالة الملف إلى «غير نشط». يُفضّل تنزيل نسخة احتياطية قبل الحذف.');
+    if(!await confirmDelete({title:'حذف مريض',lines,word:'حذف'}))return false;
+    const r=await deleteRecord('patients','id',id);
+    if(!r.ok){alert(r.message);return false;}
+    return true;
+  }
+  async function deleteAppointment(id){
+    const {data:a,error}=await sb.from('sanad_calendar_appointments').select('id,status,appointment_at,package_id,patients(full_name)').eq('id',id).maybeSingle();
+    if(error||!a){alert('تعذر تحميل الموعد: '+(error?.message||'غير موجود'));return false;}
+    const when=new Date(a.appointment_at).toLocaleString('ar-EG',{timeZone:'Africa/Cairo',dateStyle:'medium',timeStyle:'short'});
+    const completed=a.status==='completed';
+    const lines=[`سيتم حذف موعد المريض «${a.patients?.full_name||'—'}» بتاريخ ${when} (${statusName(a.status)}).`];
+    if(completed)lines.push('هذه جلسة مكتملة: حذفها قد لا يعدّل الإيراد المسجل في الحسابات ولا يرجع جلسة للباقة، فراجع الحسابات بعد الحذف.');
+    else if(a.package_id)lines.push('الموعد مرتبط بباقة.');
+    if(!await confirmDelete({title:'حذف موعد',lines,word:completed?'حذف':''}))return false;
+    const r=await deleteRecord('sanad_calendar_appointments','id',id);
+    if(!r.ok){alert(r.message);return false;}
+    return true;
+  }
+  async function deletePackage(id){
+    const {data:k,error}=await sb.from('sanad_package_summary').select('package_id,package_name,patient_name,total_paid,total_sessions,remaining_sessions').eq('package_id',id).maybeSingle();
+    if(error||!k){alert('تعذر تحميل الباقة: '+(error?.message||'غير موجودة'));return false;}
+    const paid=Number(k.total_paid||0);
+    const lines=[`سيتم حذف باقة «${k.package_name}» للمريض ${k.patient_name}.`];
+    if(paid>0)lines.push(`الباقة عليها مدفوعات بقيمة ${money(paid)}. حذف الباقة قد لا يحذف الإيراد المسجل في الحسابات، فراجع الحسابات بعد الحذف.`);
+    if(Number(k.total_sessions||0)-Number(k.remaining_sessions||0)>0)lines.push('تم استهلاك جلسات من هذه الباقة، وقد يمنع النظام الحذف بسبب ارتباطها بمواعيد.');
+    if(!await confirmDelete({title:'حذف باقة',lines,word:paid>0?'حذف':''}))return false;
+    const r=await deleteRecord('patient_packages','id',id);
+    if(!r.ok){alert(r.message);return false;}
+    return true;
   }
   function isAdmin(){return state.profile?.role==='admin';}
   function isRole(...roles){
@@ -197,8 +273,7 @@
       return;
     }
     let patientQ=sb.from('patients').select('id',{count:'exact',head:true});
-    const todayBounds=cairoDayBounds();
-    let apptQ=sb.from('sanad_calendar_appointments').select('id',{count:'exact',head:true}).gte('appointment_at',todayBounds.start).lt('appointment_at',todayBounds.end);
+    let apptQ=sb.from('sanad_calendar_appointments').select('id',{count:'exact',head:true}).gte('appointment_at',new Date(new Date().setHours(0,0,0,0)).toISOString()).lt('appointment_at',new Date(new Date().setHours(24,0,0,0)).toISOString());
     let managerPatientCount;
     if(role==='technical_manager' && state.managerDepartments.length){
       apptQ=apptQ.in('department_id',state.managerDepartments);
@@ -227,6 +302,7 @@
       else if(page==='departments') await departmentsPage();
       else if(page==='patients') await patientsPage();
       else if(page==='appointments') await appointmentsPage();
+      else if(page==='bulkSchedule') await bulkSchedulePage();
       else if(page==='packages') await packagesPage();
       else if(page==='finances') await financesPage();
       else if(page==='dailyFinance') await dailyFinancePage();
@@ -268,8 +344,9 @@
     const patientIds=[...new Set((links.data||[]).map(x=>x.patient_id))];
     let rows=[];
     if(patientIds.length){const result=await sb.from('patients').select('id,file_number,full_name,phone,sex,department_id,is_active,created_at').in('id',patientIds).order('created_at',{ascending:false}).limit(500);if(result.error){$('sectionBody').innerHTML=`<div class="notice error">تعذر تحميل مرضى القسم: ${esc(result.error.message)}</div>`;return;}rows=result.data||[];}
-    $('sectionBody').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>رقم الملف</th><th>اسم المريض</th><th>الهاتف</th><th>النوع</th><th>الحالة</th></tr></thead><tbody>${rows.map(p=>`<tr><td>${esc(p.file_number??p.id)}</td><td>${esc(p.full_name)}</td><td>${esc(p.phone||'—')}</td><td>${esc(p.sex||'—')}</td><td><span class="badge">${p.is_active===false?'غير نشط':'نشط'}</span></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا يوجد مرضى مسجلون في هذا القسم حتى الآن.</div>';
+    $('sectionBody').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>كود المريض</th><th>اسم المريض</th><th>الهاتف</th><th>النوع</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody>${rows.map(p=>`<tr><td>${esc(p.file_number??'—')}</td><td>${esc(p.full_name)}</td><td>${esc(p.phone||'—')}</td><td>${esc(p.sex||'—')}</td><td><span class="badge">${p.is_active===false?'غير نشط':'نشط'}</span></td><td><button class="btn secondary" data-open-patient="${esc(p.id)}" type="button">فتح الملف</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا يوجد مرضى مسجلون في هذا القسم حتى الآن.</div>';
     attachTableSearch('sectionBody','ابحث داخل مرضى هذا القسم…');
+    $('sectionBody').querySelectorAll('[data-open-patient]').forEach(b=>b.addEventListener('click',()=>patientFilePage(b.dataset.openPatient)));
     $('sectionActions').innerHTML=`<button class="btn secondary" id="backDepartments" type="button">رجوع للأقسام</button>${isRole('admin','secretary')?'<button class="btn" id="addDeptPatient" type="button">+ إضافة مريض للقسم</button>':''}`;
     $('backDepartments')?.addEventListener('click',()=>{state.selectedDepartment=null;departmentsPage();});
     $('addDeptPatient')?.addEventListener('click',()=>patientForm(selected.id));
@@ -294,7 +371,7 @@
       return `<form class="manager-card" data-manager-form="${esc(m.user_id)}"><div class="manager-head"><div><strong>${esc(m.full_name||'مدير فني بدون اسم')}</strong><div class="muted small">${m.is_active===false?'الحساب موقوف':'حساب نشط'}</div></div><button class="btn" type="submit">حفظ الأقسام</button></div><div class="check-grid">${state.departments.map(d=>`<label class="check-item"><input type="checkbox" name="department_id" value="${esc(d.id)}" ${current.has(d.id)?'checked':''}><span>${esc(d.name)}</span></label>`).join('')}</div><div data-manager-message class="small" aria-live="polite"></div></form>`;
     }).join(''):'<div class="empty">لا يوجد مديرو أقسام حاليًا.</div>';
     const employeeRows=employees.length?`<div class="table-wrap"><table><thead><tr><th>اسم الموظف</th><th>المسمى الوظيفي</th><th>الأقسام</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody>${employees.map(x=>{const names=employeeLinks.filter(l=>l.employee_id===x.id).map(l=>deptName(l.department_id));if(x.primary_department_id&&!names.includes(deptName(x.primary_department_id)))names.unshift(deptName(x.primary_department_id));return `<tr><td>${esc(x.full_name)}</td><td>${esc(x.job_title||'—')}</td><td>${esc(names.join('، ')||'—')}</td><td><span class="badge ${x.is_active===false?'cancelled':''}">${x.is_active===false?'غير نشط':'نشط'}</span></td><td><div class="toolbar"><button class="btn secondary" type="button" data-edit-employee="${esc(x.id)}">تعديل</button><button class="btn ${x.is_active===false?'secondary':'danger'}" type="button" data-toggle-employee="${esc(x.id)}" data-active="${x.is_active===false?'false':'true'}">${x.is_active===false?'تفعيل':'إيقاف'}</button></div></td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty">لا توجد ملفات موظفين مسجلة بعد. ابدأ بإضافة طبيب تجريبي لاختبار الكلندر.</div>';
-    setPage('ملفات الموظفين والأطباء',`<h4>ملفات الموظفين (بدون حساب دخول)</h4><p class="muted">سجّل الأطباء والمعالجين وباقي العاملين هنا. لا يحتاج هذا الملف إلى بريد إلكتروني أو User UID أو كلمة مرور. يمكن ربط الموظف بأكثر من قسم.</p><form id="employeeForm"><input type="hidden" name="id"><div class="form-grid"><div class="field"><label>اسم الموظف *</label><input name="full_name" maxlength="120" required placeholder="اسم الطبيب أو الموظف"></div><div class="field"><label>المسمى الوظيفي *</label><input name="job_title" maxlength="100" required placeholder="طبيب علاج طبيعي / أخصائي تخاطب…"></div><div class="field"><label>القسم الأساسي</label><select name="primary_department_id"><option value="">بدون قسم أساسي</option>${state.departments.map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label>ملاحظات (اختياري)</label><input name="notes" maxlength="500" placeholder="ملاحظات إدارية مختصرة"></div></div><label style="font-weight:700;font-size:13px">الأقسام التي يعمل بها الموظف *</label><div class="check-grid">${state.departments.map(d=>`<label class="check-item"><input type="checkbox" name="department_id" value="${esc(d.id)}"><span>${esc(d.name)}</span></label>`).join('')}</div><div class="field"><label class="check-item"><input type="checkbox" name="is_active" checked> الموظف نشط</label></div><div class="toolbar"><button class="btn" type="submit">حفظ ملف الموظف</button><button class="btn ghost" type="reset" id="resetEmployeeForm">تفريغ النموذج</button></div><div id="employeeMessage"></div></form><h4 style="margin-top:22px">الموظفون المسجلون (${employees.length})</h4>${employeeRows}<h4 style="margin-top:28px">حسابات الدخول والصلاحيات</h4><p class="muted">اربط حساب الدخول (Supabase Auth) بملف الموظف وحدد دوره. أنشئ الحساب أولًا من Authentication › Users في لوحة Supabase، ثم انسخ الـ User UID هنا. بدون هذه الخطوة لن يستطيع أي موظف تسجيل الدخول.</p><form id="staffProfileForm"><div class="form-grid"><div class="field"><label>معرف المستخدم (User UID) *</label><input name="user_id" required placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" style="direction:ltr;text-align:left"></div><div class="field"><label>اسم الموظف *</label><input name="full_name" required maxlength="120" placeholder="الاسم كما سيظهر في النظام"></div><div class="field"><label>الدور *</label><select name="role">${roleOptions.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></div><div class="field"><label>القسم الأساسي</label><select name="department_id"><option value="">بدون قسم أساسي</option>${state.departments.map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select><small class="muted">إلزامي لمدير القسم والدكتور/المعالج.</small></div><div class="field"><label class="check-item"><input type="checkbox" name="is_active" checked> الحساب نشط</label></div></div><div class="toolbar"><button class="btn" type="submit">حفظ ربط الحساب</button></div><div id="staffProfileMessage"></div></form><h4 style="margin-top:22px">الحسابات المرتبطة (${staff.length})</h4>${profileRows}<h4 style="margin-top:28px">توزيع المديرين الفنيين والأطباء على الأقسام</h4>${managerSection}`);
+    setPage('ملفات الموظفين والأطباء',`<h4>ملفات الموظفين (بدون حساب دخول)</h4><p class="muted">سجّل الأطباء والمعالجين وباقي العاملين هنا. لا يحتاج هذا الملف إلى بريد إلكتروني أو User UID أو كلمة مرور. يمكن ربط الموظف بأكثر من قسم.</p><form id="employeeForm"><input type="hidden" name="id"><div class="form-grid"><div class="field"><label>اسم الموظف *</label><input name="full_name" maxlength="120" required placeholder="اسم الطبيب أو الموظف"></div><div class="field"><label>المسمى الوظيفي *</label><input name="job_title" maxlength="100" required placeholder="طبيب علاج طبيعي / أخصائي تخاطب…"></div><div class="field"><label>القسم الأساسي</label><select name="primary_department_id"><option value="">بدون قسم أساسي</option>${state.departments.map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label>ملاحظات (اختياري)</label><input name="notes" maxlength="500" placeholder="ملاحظات إدارية مختصرة"></div></div><label style="font-weight:700;font-size:13px">الأقسام التي يعمل بها الموظف *</label><div class="check-grid">${state.departments.map(d=>`<label class="check-item"><input type="checkbox" name="department_id" value="${esc(d.id)}"><span>${esc(d.name)}</span></label>`).join('')}</div><div class="field"><label class="check-item"><input type="checkbox" name="is_active" checked> الموظف نشط</label></div><div class="toolbar"><button class="btn" type="submit">حفظ ملف الموظف</button><button class="btn ghost" type="reset" id="resetEmployeeForm">تفريغ النموذج</button></div><div id="employeeMessage"></div></form><h4 style="margin-top:22px">الموظفون المسجلون (${employees.length})</h4>${employeeRows}`);
     const employeeForm=$('employeeForm');
     employeeForm?.addEventListener('reset',()=>{setTimeout(()=>{employeeForm.querySelector('[name=id]').value='';employeeForm.querySelectorAll('input[name=department_id]').forEach(x=>x.checked=false);},0);});
     employeeForm?.addEventListener('submit',async e=>{
@@ -306,7 +383,7 @@
       if(saved.error){btn.disabled=false;msg($('employeeMessage'),'تعذر حفظ ملف الموظف: '+saved.error.message);return;}
       const employeeId=saved.data.id;const removed=await sb.from('sanad_employee_departments').delete().eq('employee_id',employeeId);if(removed.error){btn.disabled=false;msg($('employeeMessage'),'تم حفظ بيانات الموظف، لكن تعذر تحديث الأقسام: '+removed.error.message);return;}
       const linked=await sb.from('sanad_employee_departments').insert(selected.map(department_id=>({employee_id:employeeId,department_id})));if(linked.error){btn.disabled=false;msg($('employeeMessage'),'تم حفظ الملف، لكن تعذر ربط الأقسام: '+linked.error.message);return;}
-      await staffAccessPage();msg($('employeeMessage'),'تم حفظ ملف الموظف وربطه بالأقسام بنجاح.','success');
+      msg($('employeeMessage'),'تم حفظ ملف الموظف وربطه بالأقسام بنجاح.','success');await staffAccessPage();
     });
     $('sectionBody').querySelectorAll('[data-edit-employee]').forEach(btn=>btn.addEventListener('click',()=>{const x=employees.find(y=>y.id===btn.dataset.editEmployee);if(!x)return;const f=$('employeeForm');f.elements.id.value=x.id;f.elements.full_name.value=x.full_name||'';f.elements.job_title.value=x.job_title||'';f.elements.primary_department_id.value=x.primary_department_id||'';f.elements.notes.value=x.notes||'';f.elements.is_active.checked=x.is_active!==false;const selected=new Set(employeeLinks.filter(l=>l.employee_id===x.id).map(l=>l.department_id));if(x.primary_department_id)selected.add(x.primary_department_id);f.querySelectorAll('input[name=department_id]').forEach(c=>c.checked=selected.has(c.value));f.scrollIntoView({behavior:'smooth',block:'start'});}));
     $('sectionBody').querySelectorAll('[data-toggle-employee]').forEach(btn=>btn.addEventListener('click',async()=>{const next=btn.dataset.active!=='false'?false:true;btn.disabled=true;const {error}=await sb.from('sanad_employees').update({is_active:next}).eq('id',btn.dataset.toggleEmployee);if(error){btn.disabled=false;alert('تعذر تحديث حالة الموظف: '+error.message);return;}await staffAccessPage();}));
@@ -319,7 +396,7 @@
       const btn=e.currentTarget.querySelector('button[type=submit]');btn.disabled=true;
       const {error}=await sb.from('staff_profiles').upsert(payload,{onConflict:'user_id'});btn.disabled=false;
       if(error){msg($('staffProfileMessage'),'تعذر حفظ ملف الموظف: '+error.message);return;}
-      await staffAccessPage();msg($('staffProfileMessage'),'تم حفظ ملف الموظف وربطه بالحساب.','success');
+      msg($('staffProfileMessage'),'تم حفظ ملف الموظف وربطه بالحساب.','success');await staffAccessPage();
     });
     $('sectionBody').querySelectorAll('[data-toggle-staff]').forEach(btn=>btn.addEventListener('click',async()=>{
       const next=btn.dataset.active!=='false'?false:true;btn.disabled=true;
@@ -351,12 +428,55 @@
     } else {const r=await sb.from('patients').select('id,file_number,full_name,phone,sex,department_id,is_active,created_at').order('created_at',{ascending:false}).limit(500);data=r.data;error=r.error;}
     if(error){$('sectionBody').innerHTML=`<div class="notice error">تعذر تحميل المرضى: ${esc(error.message)}</div><p class="muted small">قد تكون سياسة RLS أو أسماء الأعمدة بحاجة إلى مراجعة.</p>`;return;}
     state.patients=data||[];
-    $('sectionBody').innerHTML=state.patients.length?`<div class="table-wrap"><table><thead><tr><th>رقم الملف</th><th>اسم المريض</th><th>الهاتف</th><th>النوع</th><th>القسم الأساسي</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody>${state.patients.map(p=>`<tr><td>${esc(p.file_number??p.id)}</td><td>${esc(p.full_name)}</td><td>${esc(p.phone||'—')}</td><td>${esc(p.sex||'—')}</td><td>${esc(deptName(p.department_id))}</td><td><span class="badge">${p.is_active===false?'غير نشط':'نشط'}</span></td><td>${isRole('admin','secretary')?`<button class="btn secondary" data-edit-patient="${esc(p.id)}" type="button">تعديل الملف</button>`:'—'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد ملفات مرضى حتى الآن. يمكنك إضافة أول مريض.</div>';
-    attachTableSearch('sectionBody','ابحث عن المريض بالاسم أو الهاتف أو رقم الملف…');
+    $('sectionBody').innerHTML=state.patients.length?`<div class="table-wrap"><table><thead><tr><th>كود المريض</th><th>اسم المريض</th><th>الهاتف</th><th>النوع</th><th>القسم الأساسي</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody>${state.patients.map(p=>`<tr><td>${esc(p.file_number??'—')}</td><td>${esc(p.full_name)}</td><td>${esc(p.phone||'—')}</td><td>${esc(p.sex||'—')}</td><td>${esc(deptName(p.department_id))}</td><td><span class="badge">${p.is_active===false?'غير نشط':'نشط'}</span></td><td><div class="toolbar"><button class="btn secondary" data-open-patient="${esc(p.id)}" type="button">فتح الملف</button>${isRole('admin','secretary')?`<button class="btn ghost" data-edit-patient="${esc(p.id)}" type="button">تعديل</button>`:''}${isAdmin()?`<button class="btn danger" data-delete="patient" data-id="${esc(p.id)}" data-name="${esc(p.full_name)}" type="button">حذف</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد ملفات مرضى حتى الآن. يمكنك إضافة أول مريض.</div>';
+    attachTableSearch('sectionBody','ابحث عن المريض بالاسم أو الهاتف أو الكود…');
+    $('sectionBody').querySelectorAll('[data-open-patient]').forEach(b=>b.addEventListener('click',()=>patientFilePage(b.dataset.openPatient)));
     $('sectionBody').querySelectorAll('[data-edit-patient]').forEach(b=>b.addEventListener('click',()=>patientForm(null,b.dataset.editPatient)));
     $('sectionActions').innerHTML=isRole('admin','secretary')?'<button class="btn" id="addPatientBtn" type="button">+ إضافة مريض</button>':'';$('addPatientBtn')?.addEventListener('click',patientForm);
   }
   function deptName(id){return state.departments.find(d=>d.id===id)?.name||'—';}
+  async function patientFilePage(patientId){
+    if(!isRole('admin','secretary','receptionist','technical_manager')){setPage('ملف المريض','<div class="notice error">غير مصرح لك بفتح ملفات المرضى.</div>');return;}
+    const backTo=state.page==='departments'?'departments':'patients';
+    const showMoney=isRole('admin','secretary');
+    const actions=`<button class="btn secondary" id="backFromPatientFile" type="button">رجوع</button>${isRole('admin','secretary')?'<button class="btn" id="editFromPatientFile" type="button">تعديل الملف</button>':''}`;
+    const wire=()=>{$('backFromPatientFile')?.addEventListener('click',()=>showPage(backTo));$('editFromPatientFile')?.addEventListener('click',()=>patientForm(null,patientId));};
+    setPage('ملف المريض','<div class="empty">جارٍ تحميل ملف المريض…</div>',actions);wire();
+    let aq=sb.from('sanad_calendar_appointments').select('id,department_id,therapist_id,appointment_at,duration_minutes,status,appointment_type,package_id,session_price,collected_amount,payment_method').eq('patient_id',patientId).order('appointment_at',{ascending:false}).limit(500);
+    if(state.profile.role==='technical_manager')aq=aq.in('department_id',state.managerDepartments);
+    const none={data:[],error:null};
+    const [pRes,lRes,aRes,kRes,payRes]=await Promise.all([
+      sb.from('patients').select('id,file_number,full_name,phone,sex,department_id,date_of_birth,guardian_name,address,notes,is_active,created_at').eq('id',patientId).maybeSingle(),
+      sb.from('patient_departments').select('department_id').eq('patient_id',patientId),
+      aq,
+      showMoney?sb.from('sanad_package_summary').select('*').eq('patient_id',patientId).order('purchased_at',{ascending:false}):Promise.resolve(none),
+      showMoney?sb.from('package_payments').select('package_id,amount,payment_method,payment_date,reference_number').eq('patient_id',patientId).order('payment_date',{ascending:false}):Promise.resolve(none)
+    ]);
+    if(pRes.error||!pRes.data){setPage('ملف المريض',`<div class="notice error">تعذر تحميل الملف: ${esc(pRes.error?.message||'المريض غير موجود أو لا تملك صلاحية عرضه')}</div>`,actions);wire();return;}
+    const p=pRes.data;
+    const deptIds=[...new Set([...(lRes.data||[]).map(x=>x.department_id),p.department_id].filter(Boolean))];
+    const appts=aRes.data||[],pkgs=kRes.data||[],pays=payRes.data||[];
+    const method={cash:'نقدي',card:'بطاقة',transfer:'تحويل',other:'أخرى'};
+    const fmt=v=>v?new Date(v).toLocaleString('ar-EG',{timeZone:'Africa/Cairo',dateStyle:'short',timeStyle:'short'}):'—';
+    const completed=appts.filter(a=>a.status==='completed').length;
+    const upcoming=appts.filter(a=>!['cancelled','completed','no_show'].includes(a.status)&&new Date(a.appointment_at).getTime()>=Date.now()).length;
+    const sessionCollections=appts.filter(a=>a.status==='completed'&&Number(a.collected_amount||0)>0);
+    const paidPackages=pays.reduce((n,x)=>n+Number(x.amount||0),0),paidSessions=sessionCollections.reduce((n,x)=>n+Number(x.collected_amount||0),0);
+    const pkgName=id=>pkgs.find(x=>x.package_id===id)?.package_name||'باقة';
+    const errs=[aRes,kRes,payRes].filter(x=>x.error).map(x=>x.error.message);
+    const info=(l,v)=>`<div class="info-item"><small>${l}</small><div>${v}</div></div>`;
+    const sexLabel=({male:'ذكر',female:'أنثى'})[p.sex]||'—';
+    const apptTable=appts.length?`<div class="table-wrap"><table><thead><tr><th>التاريخ والوقت</th><th>القسم</th><th>المعالج</th><th>النوع</th><th>الحالة</th>${showMoney?'<th>سعر الجلسة</th><th>المحصل</th>':''}</tr></thead><tbody>${appts.map(a=>`<tr><td>${fmt(a.appointment_at)}</td><td>${esc(deptName(a.department_id))}</td><td>${esc(staffName(a.therapist_id))}</td><td>${a.appointment_type==='assessment'?'كشف':'جلسة'}${a.package_id?' (باقة)':''}</td><td><span class="badge ${['cancelled','no_show'].includes(a.status)?'cancelled':a.status==='pending'?'pending':''}">${esc(statusName(a.status))}</span></td>${showMoney?`<td>${a.session_price!=null?money(a.session_price):'—'}</td><td>${a.status==='completed'&&a.collected_amount!=null?money(a.collected_amount):'—'}</td>`:''}</tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد مواعيد مسجلة لهذا المريض.</div>';
+    let money_html='';
+    if(showMoney){
+      const pkgTable=pkgs.length?`<div class="table-wrap"><table><thead><tr><th>الباقة</th><th>القسم</th><th>الجلسات المستهلكة</th><th>قيمة الباقة</th><th>المدفوع</th><th>المتبقي</th></tr></thead><tbody>${pkgs.map(k=>`<tr><td>${esc(k.package_name)}</td><td>${esc(k.department_name||deptName(k.department_id))}</td><td>${Number(k.total_sessions||0)-Number(k.remaining_sessions||0)} / ${esc(k.total_sessions)}</td><td>${money(k.package_total)}</td><td>${money(k.total_paid)}</td><td>${money(k.remaining_amount)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد باقات لهذا المريض.</div>';
+      const moves=[...pays.map(x=>({date:x.payment_date,kind:'دفعة باقة — '+pkgName(x.package_id),amount:x.amount,method:x.payment_method,ref:x.reference_number})),...sessionCollections.map(a=>({date:a.appointment_at,kind:'جلسة فردية — '+deptName(a.department_id),amount:a.collected_amount,method:a.payment_method,ref:''}))].sort((a,b)=>new Date(b.date)-new Date(a.date));
+      const moveTable=moves.length?`<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>البيان</th><th>المبلغ</th><th>طريقة الدفع</th><th>المرجع</th></tr></thead><tbody>${moves.map(x=>`<tr><td>${fmt(x.date)}</td><td>${esc(x.kind)}</td><td>${money(x.amount)}</td><td>${esc(method[x.method]||x.method||'—')}</td><td>${esc(x.ref||'—')}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد مدفوعات مسجلة.</div>';
+      money_html=`<h4 style="margin-top:22px">الباقات</h4>${pkgTable}<h4 style="margin-top:22px">المعاملات المالية (${moves.length})</h4>${moveTable}`;
+    }
+    setPage('ملف المريض — '+(p.full_name||''),`${errs.length?`<div class="notice error">تعذر تحميل جزء من البيانات: ${esc(errs.join(' | '))}</div>`:''}<div class="info-grid">${info('كود المريض',esc(p.file_number??'—'))}${info('الاسم',esc(p.full_name))}${info('الهاتف',esc(p.phone||'—'))}${info('النوع',sexLabel)}${info('تاريخ الميلاد',esc(p.date_of_birth||'—'))}${info('ولي الأمر',esc(p.guardian_name||'—'))}${info('العنوان',esc(p.address||'—'))}${info('الحالة',p.is_active===false?'غير نشط':'نشط')}${info('الأقسام',esc(deptIds.map(deptName).join('، ')||'—'))}${info('ملاحظات',esc(p.notes||'—'))}</div><div class="stats">${stat('إجمالي المواعيد',appts.length,'كل التاريخ')}${stat('جلسات مكتملة',completed,'تم تأكيدها')}${stat('مواعيد قادمة',upcoming,'غير ملغاة')}${showMoney?stat('إجمالي المحصل',money(paidPackages+paidSessions),'باقات + جلسات فردية'):stat('ملغاة / لم يحضر',appts.filter(a=>['cancelled','no_show'].includes(a.status)).length,'من كل المواعيد')}</div><h4>المواعيد والجلسات (${appts.length})</h4>${apptTable}${money_html}`,actions);
+    wire();
+  }
   async function patientForm(defaultDepartmentId=null,editId=null){
     if(!isRole('admin','secretary')){setPage('ملفات المرضى','<div class="notice error">هذه الصلاحية مخصصة للمدير الإداري والسكرتارية.</div>');return;}
     const depts=allowedDepartments();
@@ -398,56 +518,64 @@
       btn.disabled=false;msg($('patientMessage'),editId?'تم تحديث ملف المريض وإعدادات أقسامه.':'تم حفظ المريض وربطه بالأقسام المحددة.','success');setTimeout(()=>patientsPage(),900);
     });
   }
+  function addDays(dateString,n){const d=new Date(dateString+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
+  function cairoTime(v){return new Date(v).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit',timeZone:'Africa/Cairo'});}
   async function appointmentsPage(){
     if(!isRole('admin','secretary','receptionist','technical_manager')){setPage('المواعيد والجلسات','<div class="notice error">غير مصرح لك بفتح جداول المواعيد.</div>');return;}
-    try{await refreshCalendarTherapists();}catch(e){setPage('المواعيد والجلسات',`<div class="notice error">${esc(e.message)}</div>`);return;}
-    const selectedDate=state.calendarDate||cairoDateString();
-    const [yy,mm]=selectedDate.split('-').map(Number);
-    const monthStart=`${yy}-${String(mm).padStart(2,'0')}-01`;
-    const nextMonthDate=new Date(yy,mm,1);
-    const monthEnd=`${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth()+1).padStart(2,'0')}-01`;
-    const from=cairoDayBounds(monthStart).start;
-    const to=cairoDayBounds(monthEnd).start;
-    setPage('المواعيد والجلسات','<div class="empty">جارٍ تحميل جدول اليوم…</div>',isRole('admin','secretary','receptionist')?'<button class="btn" id="addApptBtn" type="button">+ إضافة موعد</button>':'');
-    let q=sb.from('sanad_calendar_appointments').select('id,patient_id,department_id,therapist_id,appointment_at,appointment_end_at,duration_minutes,status,notes,appointment_type,package_id,session_price,collected_amount,payment_method,patients(full_name)').gte('appointment_at',from).lt('appointment_at',to).order('appointment_at',{ascending:true}).limit(3000);
+    if(!state.therapists.length){try{await refreshCalendarTherapists();}catch(e){console.warn('تعذر تحميل المعالجين',e);}}
+    const day=state.calendarDate||cairoDateString();
+    state.calendarDate=day;
+    const monthStart=day.slice(0,7)+'-01';
+    const canManage=isRole('admin','secretary','receptionist');
+    const label=new Date(day+'T12:00:00Z').toLocaleDateString('ar-EG',{weekday:'long',year:'numeric',month:'long',day:'numeric',timeZone:'UTC'});
+    const isToday=day===cairoDateString();
+    const addBtn='<button class="btn" id="addApptBtn" type="button">+ إضافة موعد</button>';
+    setPage('المواعيد والجلسات',`<div class="calendar-simple-toolbar"><div class="calendar-date-nav"><button class="btn secondary" id="prevScheduleDay" type="button">▶ السابق</button><button class="btn ${isToday?'':'ghost'}" id="todaySchedule" type="button">اليوم</button><button class="btn secondary" id="nextScheduleDay" type="button">التالي ◀</button></div><label class="calendar-date-label">التاريخ <input id="scheduleAnchorDate" type="date" value="${day}"></label></div><div id="calendarArchiveNote"></div><div class="calendar-summary" id="scheduleSummary">${esc(label)} — جارٍ التحميل…</div><div class="calendar-appointments" id="calendarList"></div>`,canManage?addBtn:'');
+    const list=$('calendarList');
+    const goDay=value=>{if(!value)return;state.calendarDate=value;appointmentsPage();};
+    $('scheduleAnchorDate').addEventListener('change',e=>goDay(e.target.value));
+    $('prevScheduleDay').addEventListener('click',()=>goDay(addDays(day,-1)));
+    $('nextScheduleDay').addEventListener('click',()=>goDay(addDays(day,1)));
+    $('todaySchedule').addEventListener('click',()=>goDay(cairoDateString()));
+    $('addApptBtn')?.addEventListener('click',()=>appointmentForm());
+    const bounds=cairoDayBounds(day);
+    let q=sb.from('sanad_calendar_appointments').select('id,patient_id,department_id,therapist_id,appointment_at,appointment_end_at,duration_minutes,status,notes,appointment_type,package_id,session_price,patients(full_name)').gte('appointment_at',bounds.start).lt('appointment_at',bounds.end).order('appointment_at',{ascending:true}).limit(500);
     if(state.profile.role==='technical_manager'&&state.managerDepartments.length)q=q.in('department_id',state.managerDepartments);
-    const [apptRes,reviewRes]=await Promise.all([q,sb.from('sanad_monthly_schedule_reviews').select('month_start,status,reviewed_at,reviewed_by').eq('month_start',monthStart).maybeSingle()]);
-    if(apptRes.error){$('sectionBody').innerHTML=`<div class="notice error">تعذر تحميل المواعيد: ${esc(apptRes.error.message)}</div>`;return;}
-    state.appointments=apptRes.data||[];
-    const review=reviewRes.data||null, archived=review?.status==='reviewed';
-    const depts=allowedDepartments();
-    const therapistOptions=[...state.therapists,...state.staff.filter(x=>['technical_manager','therapist'].includes(x.role)).map(x=>({...x,id:x.user_id,department_ids:state.managerDepartments}))];
-    const canSchedule=isRole('admin','secretary','receptionist')&&!archived;
-    $('sectionBody').innerHTML=`<div class="toolbar" style="margin-bottom:12px;justify-content:space-between"><div class="toolbar"><button class="btn secondary" id="prevScheduleDay" type="button">اليوم السابق ‹</button><button class="btn ghost" id="todaySchedule" type="button">اليوم</button><button class="btn secondary" id="nextScheduleDay" type="button">› اليوم التالي</button><label class="small">التاريخ <input id="scheduleAnchorDate" type="date" value="${selectedDate}"></label></div>${canSchedule?'<button class="btn" id="openScheduleSheet" type="button">+ توزيع جدول دكتور (شيت)</button>':''}</div><div class="schedule-filters"><select id="scheduleDept"><option value="all">كل الأقسام</option>${depts.map(d=>`<option value="${esc(d.id)}">قسم: ${esc(d.name)}</option>`).join('')}</select><select id="scheduleTherapist"><option value="all">كل الدكاترة</option>${therapistOptions.map(t=>`<option value="${esc(t.id)}">د. ${esc(t.full_name)}</option>`).join('')}</select><select id="scheduleStatus"><option value="active" selected>المواعيد غير الملغية</option><option value="cancelled">المواعيد الملغية فقط</option><option value="all">كل المواعيد</option></select><input id="schedulePatientSearch" type="search" placeholder="ابحث عن المريض بالاسم…"></div><div id="scheduleArchiveStatus" class="analysis-note">${archived?`<strong>الشهر مؤرشف ومعتمد للمراجعة.</strong> الجدول محفوظ للقراءة فقط منذ ${esc(review.reviewed_at?dateTime(review.reviewed_at):'تاريخ الاعتماد')}.`:`<strong>الشهر ${monthStart.slice(0,7)} غير مؤرشف.</strong> المواعيد محفوظة ويمكن الرجوع لأي يوم خلال الشهر.`}${reviewRes.error?`<br>تعذر قراءة حالة الأرشفة: ${esc(reviewRes.error.message)}`:''}</div><div id="scheduleSummary" class="muted small" style="margin-bottom:10px"></div><div id="scheduleTable"></div>`;
-    function cairoDay(value){return new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Cairo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));}
-    function renderSchedule(){
-      const dept=$('scheduleDept').value,therapist=$('scheduleTherapist').value,day=$('scheduleAnchorDate').value;
-      let rows=state.appointments.filter(a=>cairoDay(a.appointment_at)===day);
-      const statusFilter=$('scheduleStatus')?.value||'active';
-      if(statusFilter==='active')rows=rows.filter(a=>a.status!=='cancelled');
-      else if(statusFilter==='cancelled')rows=rows.filter(a=>a.status==='cancelled');
-      if(dept!=='all')rows=rows.filter(a=>a.department_id===dept);
-      if(therapist!=='all')rows=rows.filter(a=>a.therapist_id===therapist);
-      const patientTerm=($('schedulePatientSearch')?.value||'').trim().toLocaleLowerCase('ar');
-      if(patientTerm)rows=rows.filter(a=>(a.patients?.full_name||'').toLocaleLowerCase('ar').includes(patientTerm));
-      rows.sort((a,b)=>new Date(a.appointment_at)-new Date(b.appointment_at));
-      $('scheduleSummary').textContent=`جدول ${new Date(day+'T12:00:00').toLocaleDateString('ar-EG',{weekday:'long',year:'numeric',month:'long',day:'numeric'})} — ${rows.length} موعد — ${new Set(rows.map(a=>a.therapist_id).filter(Boolean)).size} دكتور.`;
-      $('scheduleTable').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>من – إلى</th><th>الدكتور / المعالج</th><th>المريض</th><th>القسم</th><th>المدة</th><th>النوع</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody>${rows.map(a=>{const dt=new Date(a.appointment_at),end=a.appointment_end_at?new Date(a.appointment_end_at):new Date(dt.getTime()+Number(a.duration_minutes||45)*60000);return `<tr><td>${dt.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})} – ${end.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})}</td><td>${esc(staffName(a.therapist_id))}</td><td>${esc(a.patients?.full_name||'—')}</td><td>${esc(deptName(a.department_id))}</td><td>${esc(a.duration_minutes??45)} دقيقة</td><td>${a.appointment_type==='assessment'?'كشف':'جلسة علاجية'}</td><td><span class="badge ${a.status==='cancelled'?'cancelled':a.status==='pending'?'pending':''}">${esc(statusName(a.status))}</span></td><td><div class="toolbar">${isRole('admin','secretary','receptionist')&&!archived?`${a.status!=='completed'&&a.status!=='cancelled'&&a.appointment_type==='assessment'?`<button class="btn secondary" data-complete-assessment="${esc(a.id)}" type="button">تأكيد إتمام الكشف</button>`:''}${a.status!=='completed'&&a.status!=='cancelled'&&a.appointment_type!=='assessment'?`<button class="btn secondary" data-complete-therapy="${esc(a.id)}" type="button">تسجيل الجلسة وإتمامها</button><button class="btn ghost" data-no-show="${esc(a.id)}" type="button">لم يحضر</button>`:''}<button class="btn ghost" data-edit-appt="${esc(a.id)}" type="button">تعديل</button>${a.status!=='cancelled'&&a.status!=='completed'?`<button class="btn danger" data-cancel-appt="${esc(a.id)}" type="button">إلغاء</button>`:''}`:state.profile.role==='technical_manager'&&!archived&&a.status!=='completed'&&a.status!=='cancelled'&&a.appointment_type!=='assessment'?`<button class="btn secondary" data-complete-therapy="${esc(a.id)}" type="button">تسجيل الجلسة</button>`:'—'}</div></td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty">لا توجد مواعيد في هذا اليوم حسب الفلاتر المختارة.</div>';
-      $('scheduleTable').querySelectorAll('[data-edit-appt]').forEach(b=>b.addEventListener('click',()=>appointmentForm(b.dataset.editAppt)));
-      $('scheduleTable').querySelectorAll('[data-complete-therapy]').forEach(b=>b.addEventListener('click',()=>completeTherapyAppointment(b.dataset.completeTherapy)));
-      $('scheduleTable').querySelectorAll('[data-complete-assessment]').forEach(b=>b.addEventListener('click',()=>completeAssessment(b.dataset.completeAssessment)));
-      $('scheduleTable').querySelectorAll('[data-no-show]').forEach(b=>b.addEventListener('click',()=>markAppointmentNoShow(b.dataset.noShow)));
-      $('scheduleTable').querySelectorAll('[data-cancel-appt]').forEach(b=>b.addEventListener('click',()=>cancelAppointment(b.dataset.cancelAppt)));
-    }
-    const changeDay=async value=>{if(!value)return;state.calendarDate=value;await appointmentsPage();};
-    $('scheduleAnchorDate').addEventListener('change',e=>changeDay(e.target.value));
-    $('prevScheduleDay').addEventListener('click',()=>{const d=new Date($('scheduleAnchorDate').value+'T12:00:00');d.setDate(d.getDate()-1);changeDay(cairoDateString(d));});
-    $('nextScheduleDay').addEventListener('click',()=>{const d=new Date($('scheduleAnchorDate').value+'T12:00:00');d.setDate(d.getDate()+1);changeDay(cairoDateString(d));});
-    $('todaySchedule').addEventListener('click',()=>changeDay(cairoDateString()));
-    ['scheduleDept','scheduleTherapist','scheduleStatus'].forEach(id=>$(id).addEventListener('change',renderSchedule));$('schedulePatientSearch').addEventListener('input',renderSchedule);
-    $('openScheduleSheet')?.addEventListener('click',bulkSchedulePage);
-    renderSchedule();
-    $('sectionActions').innerHTML=isRole('admin','secretary','receptionist')&&!archived?'<button class="btn" id="addApptBtn" type="button">+ إضافة موعد</button>':'';$('addApptBtn')?.addEventListener('click',()=>appointmentForm());
+    const [apptRes,reviewRes]=await Promise.all([q,sb.from('sanad_monthly_schedule_reviews').select('month_start,status,reviewed_at').eq('month_start',monthStart).maybeSingle()]);
+    // لو المستخدم انتقل ليوم آخر أو صفحة أخرى أثناء التحميل، لا نرسم نتيجة قديمة
+    if(!list.isConnected)return;
+    if(apptRes.error){$('scheduleSummary').textContent=label;list.innerHTML=`<div class="notice error">تعذر تحميل المواعيد: ${esc(apptRes.error.message)}</div>`;return;}
+    const rows=apptRes.data||[];
+    const archived=reviewRes.data?.status==='reviewed';
+    const editable=canManage&&!archived;
+    state.appointments=rows;
+    $('calendarArchiveNote').innerHTML=archived?'<div class="analysis-note"><strong>هذا الشهر مؤرشف ومعتمد.</strong> المواعيد للقراءة فقط.</div>':'';
+    $('sectionActions').innerHTML=editable?addBtn:'';
+    $('addApptBtn')?.addEventListener('click',()=>appointmentForm());
+    const cancelledCount=rows.filter(a=>a.status==='cancelled').length;
+    $('scheduleSummary').textContent=`${label} — ${rows.length-cancelledCount} موعد${cancelledCount?` · ${cancelledCount} ملغي`:''}`;
+    list.innerHTML=rows.length?rows.map(a=>{
+      const start=new Date(a.appointment_at);
+      const end=a.appointment_end_at?new Date(a.appointment_end_at):new Date(start.getTime()+Number(a.duration_minutes||45)*60000);
+      const isAssess=a.appointment_type==='assessment';
+      const open=!['completed','cancelled','no_show'].includes(a.status);
+      let actions='';
+      if(editable){
+        if(open)actions+=isAssess?`<button class="btn secondary" data-act="assess" data-id="${esc(a.id)}" type="button">تأكيد إتمام الكشف</button>`:`<button class="btn secondary" data-act="complete" data-id="${esc(a.id)}" type="button">إتمام الجلسة</button>`;
+        actions+=`<button class="btn ghost" data-act="edit" data-id="${esc(a.id)}" type="button">تعديل</button>`;
+        if(open&&!isAssess)actions+=`<button class="btn ghost" data-act="noshow" data-id="${esc(a.id)}" type="button">لم يحضر</button>`;
+        if(a.status!=='cancelled'&&a.status!=='completed')actions+=`<button class="btn danger" data-act="cancel" data-id="${esc(a.id)}" type="button">إلغاء</button>`;
+        if(isAdmin())actions+=`<button class="btn danger" data-delete="appointment" data-id="${esc(a.id)}" type="button">حذف</button>`;
+      }
+      const badgeClass=['cancelled','no_show'].includes(a.status)?'cancelled':a.status==='pending'?'pending':'';
+      const meta=[deptName(a.department_id),'د. '+staffName(a.therapist_id),(a.duration_minutes??45)+' دقيقة',isAssess?'كشف':'جلسة علاجية',a.package_id?'ضمن باقة':''].filter(Boolean).map(esc).join(' · ');
+      return `<div class="calendar-appointment-card ${a.status==='cancelled'?'cancelled':a.status==='completed'?'done':''}"><div class="calendar-appointment-time">${cairoTime(start)} – ${cairoTime(end)}</div><div class="calendar-appointment-main"><strong>${esc(a.patients?.full_name||'—')}</strong><div class="calendar-appointment-meta">${meta}</div>${a.notes?`<div class="calendar-appointment-meta">${esc(a.notes)}</div>`:''}</div><div class="calendar-appointment-status"><span class="badge ${badgeClass}">${esc(statusName(a.status))}</span></div>${actions?`<div class="calendar-appointment-actions">${actions}</div>`:''}</div>`;
+    }).join(''):'<div class="empty">لا توجد مواعيد في هذا اليوم.</div>';
+    list.addEventListener('click',e=>{
+      const b=e.target.closest('[data-act]');if(!b)return;
+      const id=b.dataset.id;
+      ({edit:()=>appointmentForm(id),cancel:()=>cancelAppointment(id),complete:()=>completeTherapyAppointment(id),assess:()=>completeAssessment(id),noshow:()=>markAppointmentNoShow(id)})[b.dataset.act]?.();
+    });
   }
   async function bulkSchedulePage(){
     if(!isRole('admin','secretary','receptionist')){setPage('توزيع جدول الدكتور','<div class="notice error">توزيع المواعيد متاح للمدير الإداري والسكرتارية فقط.</div>');return;}
@@ -482,7 +610,7 @@
       attachPatientSelectSearch(wrap.querySelector('[data-patient]'));updateCount();
     };
     const updateCount=()=>$('sheetCount').textContent=`${$('sheetRows').children.length} حالات في الشيت`;
-    addRow();addRow();$('addSheetRow').addEventListener('click',()=>addRow());$('backSchedule').addEventListener('click',appointmentsPage);$('sheetDate').addEventListener('change',async()=>{try{await loadExistingForDay($('sheetDate').value);}catch(e){msg($('sheetMessage'),'تعذر تحديث مواعيد اليوم: '+e.message);}});
+    addRow();addRow();$('addSheetRow').addEventListener('click',()=>addRow());$('backSchedule').addEventListener('click',()=>showPage('appointments'));$('sheetDate').addEventListener('change',async()=>{try{await loadExistingForDay($('sheetDate').value);}catch(e){msg($('sheetMessage'),'تعذر تحديث مواعيد اليوم: '+e.message);}});
     $('saveScheduleSheet').addEventListener('click',async()=>{
       const doctorId=$('sheetDoctor').value,day=$('sheetDate').value,items=[...$('sheetRows').children];
       if(!doctorId||!day||!items.length){msg($('sheetMessage'),'اختر الدكتور والتاريخ وأضف حالة واحدة على الأقل.');return;}
@@ -513,7 +641,7 @@
       }
       btn.disabled=false;
       const resultHtml=`<div class="notice ${failed.length?'error':'success'}">تم حفظ ${saved.length} من ${prepared.length} موعد${failed.length?`، وفشل ${failed.length}`:''}.</div>${failed.length?`<div class="table-wrap"><table><thead><tr><th>السطر</th><th>المريض</th><th>سبب عدم الحفظ</th></tr></thead><tbody>${failed.map(x=>`<tr><td>${x.row}</td><td>${esc(x.patient)}</td><td>${esc(x.error)}</td></tr>`).join('')}</tbody></table></div>`:''}<div class="toolbar" style="margin-top:10px"><button class="btn secondary" id="viewSavedSchedule" type="button">عرض الكليندر</button><button class="btn ghost" id="newSheet" type="button">جدول جديد</button></div>`;
-      $('sheetResults').innerHTML=resultHtml;$('viewSavedSchedule').addEventListener('click',appointmentsPage);$('newSheet').addEventListener('click',bulkSchedulePage);
+      $('sheetResults').innerHTML=resultHtml;$('viewSavedSchedule').addEventListener('click',()=>showPage('appointments'));$('newSheet').addEventListener('click',bulkSchedulePage);
       if(saved.length)msg($('sheetMessage'),`تم حفظ ${saved.length} موعد بنجاح.`,'success');else msg($('sheetMessage'),'لم يتم حفظ أي موعد. راجع أسباب الفشل بالأسفل.');
     });
   }
@@ -533,9 +661,10 @@
     if(pRes.error){setPage('إضافة موعد',`<div class="notice error">تعذر تحميل قائمة المرضى: ${esc(pRes.error.message)}</div>`);return;}
     const patients=pRes.data||[];
     const depts=allowedDepartments();
+    const defaultDept=existing?.department_id||(depts.some(d=>d.id===state.profile.department_id)?state.profile.department_id:depts[0]?.id);
     const localDate=existing?new Date(new Date(existing.appointment_at).getTime()-new Date(existing.appointment_at).getTimezoneOffset()*60000).toISOString().slice(0,16):'';
     const apptType=existing?.appointment_type||'therapy';
-    setPage(editId?'تعديل الموعد':'إضافة موعد',`<form id="apptForm"><div class="form-grid"><div class="field span-2"><label>المريض *</label><select name="patient_id" required><option value="">اختر المريض</option>${patients.map(p=>`<option value="${esc(p.id)}" ${p.id===existing?.patient_id?'selected':''}>${esc(p.full_name)}</option>`).join('')}</select></div><div class="field"><label>القسم *</label><select name="department_id" required>${depts.map(d=>`<option value="${esc(d.id)}" ${d.id===(existing?.department_id||state.profile.department_id)?'selected':''}>${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label>نوع الموعد *</label><select name="appointment_type"><option value="assessment" ${apptType==='assessment'?'selected':''}>كشف / تقييم أولي</option><option value="therapy" ${apptType==='therapy'?'selected':''}>جلسة علاجية</option></select></div><div class="field span-2"><label>الباقة المرتبطة (اختياري)</label><select name="package_id" id="appointmentPackage"><option value="">بدون باقة — جلسة فردية</option></select><small class="muted">عند تأكيد جلسة الباقة يُخصم استهلاك جلسة واحدة فقط، دون تسجيل إيراد مكرر.</small></div><div class="field"><label>سعر الجلسة (ج.م) *</label><input name="session_price" type="number" min="0" step="0.01" value="${esc(existing?.session_price??'')}"></div><div class="field"><label>التاريخ والوقت *</label><input name="appointment_at" type="datetime-local" value="${esc(localDate)}" required></div><div class="field"><label>المعالج المسؤول *</label><select name="therapist_id" id="appointmentTherapist" required><option value="">اختر المعالج</option>${state.therapists.filter(x=>x.department_ids.includes(existing?.department_id||depts[0]?.id||state.profile?.department_id)).map(x=>`<option value="${esc(x.id)}" ${x.id===existing?.therapist_id?'selected':''}>${esc(x.full_name)}${x.job_title?' — '+esc(x.job_title):''}</option>`).join('')}</select></div><div class="field"><label>المدة بالدقائق *</label><input name="duration" type="number" min="5" max="240" value="${esc(existing?.duration_minutes??'')}" required><small class="muted" id="durationHint">تُحمّل المدة الافتراضية من إعدادات المريض والقسم.</small></div><div class="field"><label>الحالة</label><select name="status" ${existing?.status==='completed'?'disabled':''}>${[['scheduled','مجدول'],['cancelled','ملغي'],['no_show','لم يأخذ الجلسة']].map(([v,l])=>`<option value="${v}" ${(existing?.status||'scheduled')===v?'selected':''}>${l}</option>`).join('')}</select><small class="muted">إتمام الجلسة يتم من زر التأكيد في الكلندر فقط.</small></div><div class="field span-2"><label>ملاحظات</label><textarea name="notes">${esc(existing?.notes||'')}</textarea></div></div><div class="toolbar"><button class="btn" type="button" id="saveAppointmentBtn">${editId?'حفظ التعديلات':'حفظ الموعد'}</button><button class="btn ghost" id="cancelAppt" type="button">رجوع</button></div><div id="apptMessage"></div></form>`);
+    setPage(editId?'تعديل الموعد':'إضافة موعد',`<form id="apptForm"><div class="form-grid"><div class="field span-2"><label>المريض *</label><select name="patient_id" required><option value="">اختر المريض</option>${patients.map(p=>`<option value="${esc(p.id)}" ${p.id===existing?.patient_id?'selected':''}>${esc(p.full_name)}</option>`).join('')}</select></div><div class="field"><label>القسم *</label><select name="department_id" required>${depts.map(d=>`<option value="${esc(d.id)}" ${d.id===defaultDept?'selected':''}>${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label>نوع الموعد *</label><select name="appointment_type"><option value="assessment" ${apptType==='assessment'?'selected':''}>كشف / تقييم أولي</option><option value="therapy" ${apptType==='therapy'?'selected':''}>جلسة علاجية</option></select></div><div class="field span-2"><label>الباقة المرتبطة (اختياري)</label><select name="package_id" id="appointmentPackage"><option value="">بدون باقة — جلسة فردية</option></select><small class="muted">عند تأكيد جلسة الباقة يُخصم استهلاك جلسة واحدة فقط، دون تسجيل إيراد مكرر.</small></div><div class="field"><label>سعر الجلسة (ج.م) *</label><input name="session_price" type="number" min="0" step="0.01" value="${esc(existing?.session_price??'')}"></div><div class="field"><label>التاريخ والوقت *</label><input name="appointment_at" type="datetime-local" value="${esc(localDate)}" required></div><div class="field"><label>المعالج المسؤول *</label><select name="therapist_id" id="appointmentTherapist" required><option value="">اختر المعالج</option>${state.therapists.filter(x=>x.department_ids.includes(defaultDept)).map(x=>`<option value="${esc(x.id)}" ${x.id===existing?.therapist_id?'selected':''}>${esc(x.full_name)}${x.job_title?' — '+esc(x.job_title):''}</option>`).join('')}</select></div><div class="field"><label>المدة بالدقائق *</label><input name="duration" type="number" min="5" max="240" value="${esc(existing?.duration_minutes??'')}" required><small class="muted" id="durationHint">تُحمّل المدة الافتراضية من إعدادات المريض والقسم.</small></div><div class="field"><label>الحالة</label><select name="status" ${existing?.status==='completed'?'disabled':''}>${[['scheduled','مجدول'],['cancelled','ملغي'],['no_show','لم يأخذ الجلسة']].map(([v,l])=>`<option value="${v}" ${(existing?.status||'scheduled')===v?'selected':''}>${l}</option>`).join('')}</select><small class="muted">إتمام الجلسة يتم من زر التأكيد في الكلندر فقط.</small></div><div class="field span-2"><label>ملاحظات</label><textarea name="notes">${esc(existing?.notes||'')}</textarea></div></div><div class="toolbar"><button class="btn" type="button" id="saveAppointmentBtn">${editId?'حفظ التعديلات':'حفظ الموعد'}</button><button class="btn ghost" id="cancelAppt" type="button">رجوع</button></div><div id="apptMessage"></div></form>`);
     const refreshPackages=async()=>{
       const patientId=$('apptForm').elements.patient_id.value,departmentId=$('apptForm').elements.department_id.value;
       const select=$('appointmentPackage');const keep=select.value||existing?.package_id||'';
@@ -591,7 +720,7 @@
       savingAppointment=true;
       btn.disabled=true;
       try{
-        msg(message,'جارٍ التحقق من البيانات وحفظ الموعد…');
+        msg(message,'جارٍ التحقق من البيانات وحفظ الموعد…','success');
         const {data:sessionData,error:sessionError}=await sb.auth.getSession();
         if(sessionError)throw new Error('تعذر التحقق من جلسة الدخول: '+sessionError.message);
         if(!sessionData?.session?.user?.id){
@@ -730,7 +859,7 @@
     await appointmentsPage();
   }
   async function completeTherapyAppointment(id){
-    if(!isRole('admin','secretary','receptionist','technical_manager'))return;
+    if(!isRole('admin','secretary','receptionist'))return;
     const {data:appt,error}=await sb.from('sanad_calendar_appointments').select('id,patient_id,department_id,appointment_at,duration_minutes,status,appointment_type,package_id,session_price,patients(full_name)').eq('id',id).maybeSingle();
     if(error||!appt){alert('تعذر تحميل الموعد: '+(error?.message||'غير موجود'));return;}
     if(appt.status==='completed'){alert('الجلسة مسجلة كمكتملة بالفعل.');return;}
@@ -781,7 +910,7 @@
     const {data,error}=await sb.from('sanad_package_summary').select('*').order('purchased_at',{ascending:false}).limit(500);
     if(error){$('sectionBody').innerHTML=`<div class="notice error">تعذر تحميل الباقات: ${esc(error.message)}</div><p class="muted small">تأكد من صلاحيات قراءة الباقات وView الملخص.</p>`;return;}
     const rows=data||[];
-    $('sectionBody').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>المريض</th><th>القسم</th><th>اسم الباقة</th><th>الكشف</th><th>سعر الجلسة</th><th>الجلسات</th><th>قيمة الباقة</th><th>المدفوع</th><th>المتبقي</th><th>المتبقي جلسات</th><th>الكشف</th><th>الإجراءات</th></tr></thead><tbody>${rows.map(p=>`<tr><td>${esc(p.patient_name)}</td><td>${esc(p.department_name)}</td><td>${esc(p.package_name)}</td><td>${money(p.assessment_fee)}</td><td>${money(p.session_price)}</td><td>${esc(p.total_sessions)}</td><td><strong>${money(p.package_total)}</strong></td><td>${money(p.total_paid)}</td><td>${money(p.remaining_amount)}</td><td>${esc(p.remaining_sessions)} / ${esc(p.total_sessions)}</td><td>${p.assessment_completed_at?'<span class="badge">تم الكشف</span>':'<span class="badge pending">لم يتم</span>'}</td><td><div class="toolbar"><button class="btn secondary" data-package-payment="${esc(p.package_id)}" type="button">تسجيل دفعة</button><button class="btn ghost" data-package-history="${esc(p.package_id)}" type="button">سجل الدفعات</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد باقات مسجلة حتى الآن. ابدأ بإنشاء أول باقة.</div>';
+    $('sectionBody').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>المريض</th><th>القسم</th><th>اسم الباقة</th><th>الكشف</th><th>سعر الجلسة</th><th>الجلسات</th><th>قيمة الباقة</th><th>المدفوع</th><th>المتبقي</th><th>المتبقي جلسات</th><th>الكشف</th><th>الإجراءات</th></tr></thead><tbody>${rows.map(p=>`<tr><td>${esc(p.patient_name)}</td><td>${esc(p.department_name)}</td><td>${esc(p.package_name)}</td><td>${money(p.assessment_fee)}</td><td>${money(p.session_price)}</td><td>${esc(p.total_sessions)}</td><td><strong>${money(p.package_total)}</strong></td><td>${money(p.total_paid)}</td><td>${money(p.remaining_amount)}</td><td>${esc(p.remaining_sessions)} / ${esc(p.total_sessions)}</td><td>${p.assessment_completed_at?'<span class="badge">تم الكشف</span>':'<span class="badge pending">لم يتم</span>'}</td><td><div class="toolbar"><button class="btn secondary" data-package-payment="${esc(p.package_id)}" type="button">تسجيل دفعة</button><button class="btn ghost" data-package-history="${esc(p.package_id)}" type="button">سجل الدفعات</button>${isAdmin()?`<button class="btn danger" data-delete="package" data-id="${esc(p.package_id)}" type="button">حذف</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد باقات مسجلة حتى الآن. ابدأ بإنشاء أول باقة.</div>';
     attachTableSearch('sectionBody','ابحث عن المريض أو اسم الباقة أو القسم…');
     $('sectionActions').innerHTML='<button class="btn" id="addPackageBtn" type="button">+ إنشاء باقة جديدة</button>';
     $('addPackageBtn')?.addEventListener('click',packageForm);
@@ -901,6 +1030,68 @@
     $('exportDailyFinance')?.addEventListener('click',()=>downloadCsv(`sanad-daily-finances-${today}.csv`,[['التاريخ','النوع','المبلغ','البند','القسم','طريقة الدفع','الوصف'],...rows.map(x=>[x.entry_date,x.entry_type==='income'?'إيراد':'مصروف',x.amount,x.category||'',deptName(x.department_id),x.payment_method||'',x.description||''])]));
   }
 
+  const chartColors=['#0f766e','#d97706','#2563eb','#9333ea','#dc2626','#0891b2','#65a30d','#db2777','#475569'];
+  function nextMonthStart(month){const [y,m]=month.split('-').map(Number);return m===12?`${y+1}-01-01`:`${y}-${String(m+1).padStart(2,'0')}-01`;}
+  async function loadMgmtChartData(month){
+    const cols='department_id,department_name,new_patients,completed_appointments,total_income,total_expenses';
+    const [dailyRes,monthlyRes]=await Promise.all([
+      sb.from('sanad_management_daily_overview').select('report_date,'+cols).gte('report_date',month+'-01').lt('report_date',nextMonthStart(month)).limit(5000),
+      sb.from('sanad_management_monthly_overview').select('report_month,'+cols).limit(5000)
+    ]);
+    const e=dailyRes.error||monthlyRes.error;
+    if(e)return {error:e.message};
+    return {daily:dailyRes.data||[],monthly:monthlyRes.data||[]};
+  }
+  function stackedChart(labels,series,fmt){
+    const totals=labels.map((_,i)=>series.reduce((a,s)=>a+(s.values[i]||0),0));
+    const max=Math.max(1,...totals);
+    const compact=v=>new Intl.NumberFormat('ar-EG',{notation:'compact',maximumFractionDigits:1}).format(v);
+    return `<div class="bars">${labels.map((l,i)=>{
+      const tot=totals[i],h=tot?Math.max(3,tot/max*72):1;
+      const segs=series.map(s=>{const v=s.values[i]||0;return v>0?`<div title="${esc(s.name)}: ${esc(fmt(v))}" style="height:${(v/tot*100).toFixed(2)}%;background:${s.color}"></div>`:'';}).join('');
+      return `<div class="bar-col" title="${esc(l)}: ${esc(fmt(tot))}"><span class="bar-value">${tot?esc(compact(tot)):''}</span><div style="width:min(100%,26px);height:${h}%;display:flex;flex-direction:column-reverse;border-radius:5px 5px 0 0;overflow:hidden;background:${tot?'transparent':'var(--line)'}">${segs}</div><span class="bar-label">${esc(l)}</span></div>`;
+    }).join('')}</div>`;
+  }
+  function initMgmtCharts(data,month){
+    const host=$('mgmtCharts');if(!host)return;
+    if(data.error){host.innerHTML=`<div class="notice error">تعذر تحميل بيانات الرسوم البيانية: ${esc(data.error)}</div>`;return;}
+    const [year,mon]=month.split('-').map(Number);
+    const monthNames=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+    const depts=state.departments.map(d=>({id:d.id,name:d.name}));
+    [...data.daily,...data.monthly].forEach(r=>{if(r.department_id&&!depts.some(d=>d.id===r.department_id))depts.push({id:r.department_id,name:r.department_name||String(r.department_id)});});
+    const colorOf=id=>chartColors[depts.findIndex(d=>d.id===id)%chartColors.length];
+    const daysInMonth=new Date(year,mon,0).getDate();
+    const metrics=[['new_patients','المرضى (تراكمي)','count'],['completed_appointments','الجلسات المكتملة','count'],['total_income','الإيرادات','money'],['total_expenses','المصروفات','money']];
+    const num=v=>Number(v||0);
+    host.innerHTML=`<div class="chart-filters"><div class="field"><label>الفترة</label><select id="mgmtChartMode"><option value="daily">يومي — ${monthNames[mon-1]} ${year}</option><option value="monthly">شهري — سنة ${year}</option></select></div><div class="field"><label>القسم</label><select id="mgmtChartDept"><option value="all">كل الأقسام (مقارنة)</option>${depts.map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select></div></div><div id="mgmtChartLegend" class="chart-legend"></div><div id="mgmtChartGrid" class="chart-grid"></div>`;
+    const render=()=>{
+      const mode=$('mgmtChartMode').value,dept=$('mgmtChartDept').value;
+      const list=dept==='all'?depts:depts.filter(d=>String(d.id)===dept);
+      const labels=mode==='daily'?Array.from({length:daysInMonth},(_,i)=>String(i+1)):monthNames;
+      const n=labels.length;
+      const mkey=r=>String(r.report_month).slice(0,7);
+      const build=metric=>list.map(d=>{
+        const values=Array(n).fill(0);
+        if(mode==='daily'){data.daily.filter(r=>r.department_id===d.id).forEach(r=>{const day=Number(String(r.report_date).slice(8,10));if(day>=1&&day<=n)values[day-1]+=num(r[metric]);});}
+        else{data.monthly.filter(r=>r.department_id===d.id&&mkey(r).slice(0,4)===String(year)).forEach(r=>{const m=Number(mkey(r).slice(5,7));if(m>=1&&m<=12)values[m-1]+=num(r[metric]);});}
+        if(metric==='new_patients'){
+          const cutoff=mode==='daily'?month:`${year}-01`;
+          let run=data.monthly.filter(r=>r.department_id===d.id&&mkey(r)<cutoff).reduce((s,r)=>s+num(r.new_patients),0);
+          for(let i=0;i<n;i++){run+=values[i];values[i]=run;}
+        }
+        return {name:d.name,color:colorOf(d.id),values};
+      });
+      $('mgmtChartLegend').innerHTML=dept==='all'?list.map(d=>`<div><i style="background:${colorOf(d.id)}"></i>${esc(d.name)}</div>`).join(''):'';
+      $('mgmtChartGrid').innerHTML=metrics.map(([metric,title,kind])=>{
+        const s=build(metric),fmt=kind==='money'?money:v=>new Intl.NumberFormat('ar-EG').format(v);
+        const totals=labels.map((_,i)=>s.reduce((a,x)=>a+x.values[i],0));
+        const caption=metric==='new_patients'?`الإجمالي في نهاية الفترة: ${fmt(totals[n-1]||0)}`:`إجمالي الفترة: ${fmt(totals.reduce((a,b)=>a+b,0))}`;
+        return `<div class="chart-card"><h4>${title}</h4><div class="chart-sub">${caption}</div>${stackedChart(labels,s,fmt)}</div>`;
+      }).join('');
+    };
+    $('mgmtChartMode').addEventListener('change',render);$('mgmtChartDept').addEventListener('change',render);render();
+  }
+
   async function managementPage(){
     if(!isAdmin()){setPage('لوحة الإدارة والتقارير','<div class="notice error">هذه اللوحة متاحة للمدير الإداري فقط.</div>');return;}
     const today=cairoDateString(),reportDate=state.managementDate||today,month=state.managementMonth||today.slice(0,7);
@@ -913,6 +1104,7 @@
     ]);
     const err=[patientsRes,packagesRes,dailyRes,monthlyRes].find(x=>x.error);
     if(err){setPage('لوحة الإدارة والتقارير',`<div class="notice error">تعذر تحميل أحد تقارير الإدارة: ${esc(err.error.message)}</div><p class="muted small">تأكد من صلاحيات قراءة الـ Views وسياسات RLS للحساب الإداري.</p>`);return;}
+    const chartData=await loadMgmtChartData(month);
     const patients=patientsRes.data||[],packages=packagesRes.data||[],daily=dailyRes.data||[],monthly=monthlyRes.data||[];
     const sum=(arr,key)=>arr.reduce((n,x)=>n+Number(x[key]||0),0);
     const packageCount=packages.filter(x=>x.status==='active').length;
@@ -921,7 +1113,8 @@
     const deptPatients=patients.map(x=>`<tr><td>${esc(x.department_name)}</td><td>${x.active_patients}</td></tr>`).join('');
     const pkgByDept={};packages.forEach(x=>{const k=x.department_id;(pkgByDept[k]??={name:x.department_name,count:0,paid:0,remaining:0,sessions:0}).count++;pkgByDept[k].paid+=Number(x.total_paid||0);pkgByDept[k].remaining+=Number(x.remaining_amount||0);pkgByDept[k].sessions+=Number(x.remaining_sessions||0);});
     const pkgRows=Object.values(pkgByDept).map(x=>`<tr><td>${esc(x.name)}</td><td>${x.count}</td><td>${money(x.paid)}</td><td>${money(x.remaining)}</td><td>${x.sessions}</td></tr>`).join('');
-    setPage('لوحة الإدارة والتقارير',`<p class="muted">اختر اليوم والشهر المطلوبين لعرض المؤشرات. كبار رجال وكبار سيدات يظهران كقسمين منفصلين.</p><div class="toolbar" style="margin:12px 0"><label class="small">التاريخ اليومي <input id="managementDate" type="date" value="${reportDate}"></label><label class="small">الشهر <input id="managementMonth" type="month" value="${month}"></label><button class="btn secondary" id="applyManagementPeriod" type="button">تطبيق</button></div><div class="stats">${stat('ارتباطات المرضى النشطة',sum(patients,'active_patients'),'المريض متعدد الأقسام يحتسب في كل قسم')}${stat('باقات نشطة',packageCount,'حسب حالة الباقة')}${stat('إجمالي المدفوع للباقات',money(totalPaid),'من سجلات دفعات الباقات')}${stat('متبقي الباقات',money(remainingAmount),remainingSessions+' جلسة متبقية')}</div><h4>نشاط اليوم حسب القسم</h4>${deptTable(daily,'daily')}<h4 style="margin-top:22px">نشاط الشهر حسب القسم</h4>${deptTable(monthly,'monthly')}<h4 style="margin-top:22px">المرضى النشطون حسب القسم</h4>${patients.length?`<div class="table-wrap"><table><thead><tr><th>القسم</th><th>المرضى النشطون</th></tr></thead><tbody>${deptPatients}</tbody></table></div>`:'<div class="empty">لا توجد بيانات.</div>'}<h4 style="margin-top:22px">ملخص الباقات حسب القسم</h4>${pkgRows?`<div class="table-wrap"><table><thead><tr><th>القسم</th><th>عدد الباقات</th><th>المدفوع</th><th>المتبقي المالي</th><th>الجلسات المتبقية</th></tr></thead><tbody>${pkgRows}</tbody></table></div>`:'<div class="empty">لا توجد باقات.</div>'}<div class="toolbar" style="margin-top:14px"><button class="btn" id="exportManagementCsv" type="button">تصدير التقرير الشامل CSV</button><span class="muted small">يشمل اليوم والشهر والمرضى النشطين وملخص الباقات حسب القسم.</span></div>`);
+    setPage('لوحة الإدارة والتقارير',`<p class="muted">اختر اليوم والشهر المطلوبين لعرض المؤشرات. كبار رجال وكبار سيدات يظهران كقسمين منفصلين.</p><div class="toolbar" style="margin:12px 0"><label class="small">التاريخ اليومي <input id="managementDate" type="date" value="${reportDate}"></label><label class="small">الشهر <input id="managementMonth" type="month" value="${month}"></label><button class="btn secondary" id="applyManagementPeriod" type="button">تطبيق</button></div><div class="stats">${stat('ارتباطات المرضى النشطة',sum(patients,'active_patients'),'المريض متعدد الأقسام يحتسب في كل قسم')}${stat('باقات نشطة',packageCount,'حسب حالة الباقة')}${stat('إجمالي المدفوع للباقات',money(totalPaid),'من سجلات دفعات الباقات')}${stat('متبقي الباقات',money(remainingAmount),remainingSessions+' جلسة متبقية')}</div><h4>الرسوم البيانية</h4><div id="mgmtCharts"></div><h4 style="margin-top:22px">نشاط اليوم حسب القسم</h4>${deptTable(daily,'daily')}<h4 style="margin-top:22px">نشاط الشهر حسب القسم</h4>${deptTable(monthly,'monthly')}<h4 style="margin-top:22px">المرضى النشطون حسب القسم</h4>${patients.length?`<div class="table-wrap"><table><thead><tr><th>القسم</th><th>المرضى النشطون</th></tr></thead><tbody>${deptPatients}</tbody></table></div>`:'<div class="empty">لا توجد بيانات.</div>'}<h4 style="margin-top:22px">ملخص الباقات حسب القسم</h4>${pkgRows?`<div class="table-wrap"><table><thead><tr><th>القسم</th><th>عدد الباقات</th><th>المدفوع</th><th>المتبقي المالي</th><th>الجلسات المتبقية</th></tr></thead><tbody>${pkgRows}</tbody></table></div>`:'<div class="empty">لا توجد باقات.</div>'}<div class="toolbar" style="margin-top:14px"><button class="btn" id="exportManagementCsv" type="button">تصدير التقرير الشامل CSV</button><span class="muted small">يشمل اليوم والشهر والمرضى النشطين وملخص الباقات حسب القسم.</span></div>`);
+    initMgmtCharts(chartData,month);
     $('applyManagementPeriod')?.addEventListener('click',()=>{state.managementDate=$('managementDate').value||today;state.managementMonth=$('managementMonth').value||today.slice(0,7);managementPage();});
     $('exportManagementCsv')?.addEventListener('click',()=>{
       const rows=[['تقرير إدارة مركز سند',''],['تاريخ التقرير اليومي',reportDate],['شهر التقرير',month],[],['نشاط اليوم حسب القسم'],['القسم','مرضى جدد','المواعيد','مكتملة','ملغاة','لم يحضر','الإيرادات','المصروفات','الصافي'],...daily.map(x=>[x.department_name||deptName(x.department_id),x.new_patients,x.total_appointments,x.completed_appointments,x.cancelled_appointments,x.no_show_appointments,x.total_income,x.total_expenses,x.net_result]),[],['نشاط الشهر حسب القسم'],['القسم','مرضى جدد','المواعيد','مكتملة','ملغاة','لم يحضر','الإيرادات','المصروفات','الصافي'],...monthly.map(x=>[x.department_name||deptName(x.department_id),x.new_patients,x.total_appointments,x.completed_appointments,x.cancelled_appointments,x.no_show_appointments,x.total_income,x.total_expenses,x.net_result]),[],['المرضى النشطون حسب القسم'],['القسم','عدد المرضى النشطين'],...patients.map(x=>[x.department_name,x.active_patients]),[],['ملخص الباقات حسب القسم'],['القسم','عدد الباقات','المدفوع','المتبقي المالي','الجلسات المتبقية'],...Object.values(pkgByDept).map(x=>[x.name,x.count,x.paid,x.remaining,x.sessions])];
@@ -939,14 +1132,14 @@
     if(patientResult.error||appointmentResult.error){const e=patientResult.error||appointmentResult.error;setPage('متابعة المرضى',`<div class="notice error">تعذر تحميل تقارير المتابعة: ${esc(e.message)}</div>`);return;}
     const rows=patientResult.data||[],appointmentRows=appointmentResult.data||[];
     const statusLabels={overdue_appointment:'موعد متأخر',has_upcoming_appointment:'لديه موعد قادم',no_completed_appointment:'لا توجد جلسة مكتملة',needs_followup:'يحتاج متابعة'};
-    const patientRows=rows.map(x=>`<tr data-followup-status="${esc(x.followup_status||'')}"><td>${esc(x.patient_name)}</td><td>${esc(x.department_name)}</td><td>${esc(x.phone||'—')}</td><td>${dateTime(x.last_completed_appointment)}</td><td>${x.days_since_last_completed??'—'}</td><td>${dateTime(x.next_appointment)}</td><td>${Number(x.overdue_appointments||0)}</td><td>${Number(x.upcoming_appointments||0)}</td><td>${Number(x.remaining_package_sessions||0)}</td><td>${money(x.remaining_package_amount)}</td><td>${esc(statusLabels[x.followup_status]||x.followup_status||'—')}</td></tr>`).join('');
-    const appointmentTable=appointmentRows.length?`<div class="table-wrap"><table id="followupAppointmentsTable"><thead><tr><th>المريض</th><th>القسم</th><th>التاريخ والوقت</th><th>المدة</th><th>الحالة</th><th>نوع المتابعة</th><th>تأخير بالساعات</th></tr></thead><tbody>${appointmentRows.map(x=>`<tr><td>${esc(x.patient_name)}</td><td>${esc(x.department_name)}</td><td>${dateTime(x.appointment_at)}</td><td>${x.duration_minutes??'—'} دقيقة</td><td>${esc(statusName(x.status))}</td><td>${x.followup_type==='overdue'?'موعد متأخر':'موعد قادم'}</td><td>${x.overdue_hours??'—'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد مواعيد قادمة أو متأخرة.</div>';
+    const patientRows=rows.map(x=>`<tr data-followup-status="${esc(x.followup_status||'')}"><td>${esc(x.patient_name)}</td><td>${esc(x.department_name)}</td><td>${esc(x.phone||'—')}</td><td>${dateTime(x.last_completed_appointment)}</td><td>${x.days_since_last_completed??'—'}</td><td>${dateTime(x.next_appointment)}</td><td>${Number(x.overdue_appointments||0)}</td><td>${Number(x.upcoming_appointments||0)}</td><td>${Number(x.remaining_package_sessions||0)}</td><td>${money(x.remaining_package_amount)}</td><td>${esc(statusLabels[x.followup_status]||x.followup_status||'—')}</td>${isAdmin()?`<td><button class="btn danger" data-delete="patient" data-id="${esc(x.patient_id)}" data-name="${esc(x.patient_name)}" type="button">حذف المريض</button></td>`:''}</tr>`).join('');
+    const appointmentTable=appointmentRows.length?`<div class="table-wrap"><table id="followupAppointmentsTable"><thead><tr><th>المريض</th><th>القسم</th><th>التاريخ والوقت</th><th>المدة</th><th>الحالة</th><th>نوع المتابعة</th><th>تأخير بالساعات</th>${isAdmin()?'<th>إجراء</th>':''}</tr></thead><tbody>${appointmentRows.map(x=>`<tr><td>${esc(x.patient_name)}</td><td>${esc(x.department_name)}</td><td>${dateTime(x.appointment_at)}</td><td>${x.duration_minutes??'—'} دقيقة</td><td>${esc(statusName(x.status))}</td><td>${x.followup_type==='overdue'?'موعد متأخر':'موعد قادم'}</td><td>${x.overdue_hours??'—'}</td>${isAdmin()?`<td><button class="btn danger" data-delete="appointment" data-id="${esc(x.appointment_id)}" type="button">حذف الموعد</button></td>`:''}</tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد مواعيد قادمة أو متأخرة.</div>';
     // Count patients who need contact, including any patient with at least one overdue appointment.
     // Deduplicate by patient_id so a patient linked to multiple departments is counted once in this KPI.
     const followupPatientIds=new Set(rows.filter(x=>Number(x.overdue_appointments||0)>0||['needs_followup','no_completed_appointment'].includes(x.followup_status)).map(x=>x.patient_id).filter(Boolean));
     const counts=Object.entries(statusLabels).map(([k,v])=>({key:k,label:v,count:rows.filter(x=>x.followup_status===k).length}));
     const needsFollowupCount=followupPatientIds.size;
-    setPage('متابعة المرضى',`<p class="muted">متابعة آخر جلسة مكتملة، الانقطاع المحتمل، المواعيد القادمة والمتأخرة، والباقات. البيانات للمتابعة فقط ولا تغيّر حالة المواعيد تلقائيًا.</p><div class="stats">${stat('إجمالي سجلات المتابعة',rows.length,'حسب الأقسام المسموح بها')}${stat('مواعيد متأخرة',appointmentRows.filter(x=>x.followup_type==='overdue').length,'تحتاج مراجعة')}${stat('مواعيد قادمة',appointmentRows.filter(x=>x.followup_type!=='overdue').length,'للتذكير والمتابعة')}${stat('مرضى يحتاجون متابعة',needsFollowupCount,'مرضى فريدون لديهم موعد متأخر أو حالة متابعة')}</div><div class="stats followup-status-cards" style="margin:12px 0"><button type="button" class="stat-card followup-filter active" data-followup-filter="all"><strong>الكل</strong><b>${rows.length}</b></button>${counts.map(x=>`<button type="button" class="stat-card followup-filter" data-followup-filter="${x.key}"><strong>${x.label}</strong><b>${x.count}</b></button>`).join('')}<button class="btn ghost" id="exportFollowupCsv" type="button">تصدير CSV</button></div><h4>ملخص متابعة المرضى</h4>${rows.length?`<div class="table-wrap"><table id="followupPatientsTable"><thead><tr><th>المريض</th><th>القسم</th><th>الهاتف</th><th>آخر جلسة مكتملة</th><th>أيام منذ آخر جلسة</th><th>الموعد القادم</th><th>متأخرات</th><th>مواعيد قادمة</th><th>جلسات باقات متبقية</th><th>متبقي مالي</th><th>الحالة</th></tr></thead><tbody>${patientRows}</tbody></table></div>`:'<div class="empty">لا توجد بيانات متابعة حتى الآن.</div>'}<h4 style="margin-top:22px">المواعيد القادمة والمتأخرة</h4>${appointmentTable}`);
+    setPage('متابعة المرضى',`<p class="muted">متابعة آخر جلسة مكتملة، الانقطاع المحتمل، المواعيد القادمة والمتأخرة، والباقات. البيانات للمتابعة فقط ولا تغيّر حالة المواعيد تلقائيًا.</p><div class="stats">${stat('إجمالي سجلات المتابعة',rows.length,'حسب الأقسام المسموح بها')}${stat('مواعيد متأخرة',appointmentRows.filter(x=>x.followup_type==='overdue').length,'تحتاج مراجعة')}${stat('مواعيد قادمة',appointmentRows.filter(x=>x.followup_type!=='overdue').length,'للتذكير والمتابعة')}${stat('مرضى يحتاجون متابعة',needsFollowupCount,'مرضى فريدون لديهم موعد متأخر أو حالة متابعة')}</div><div class="stats followup-status-cards" style="margin:12px 0"><button type="button" class="stat-card followup-filter active" data-followup-filter="all"><strong>الكل</strong><b>${rows.length}</b></button>${counts.map(x=>`<button type="button" class="stat-card followup-filter" data-followup-filter="${x.key}"><strong>${x.label}</strong><b>${x.count}</b></button>`).join('')}<button class="btn ghost" id="exportFollowupCsv" type="button">تصدير CSV</button></div><h4>ملخص متابعة المرضى</h4>${rows.length?`<div class="table-wrap"><table id="followupPatientsTable"><thead><tr><th>المريض</th><th>القسم</th><th>الهاتف</th><th>آخر جلسة مكتملة</th><th>أيام منذ آخر جلسة</th><th>الموعد القادم</th><th>متأخرات</th><th>مواعيد قادمة</th><th>جلسات باقات متبقية</th><th>متبقي مالي</th><th>الحالة</th>${isAdmin()?'<th>إجراء</th>':''}</tr></thead><tbody>${patientRows}</tbody></table></div>`:'<div class="empty">لا توجد بيانات متابعة حتى الآن.</div>'}<h4 style="margin-top:22px">المواعيد القادمة والمتأخرة</h4>${appointmentTable}`);
     document.querySelectorAll('[data-followup-filter]').forEach(btn=>btn.addEventListener('click',()=>{const key=btn.dataset.followupFilter;document.querySelectorAll('[data-followup-filter]').forEach(x=>x.classList.toggle('active',x===btn));document.querySelectorAll('#followupPatientsTable tbody tr').forEach(tr=>{tr.hidden=key!=='all'&&tr.dataset.followupStatus!==key;});}));
     attachTableSearch('sectionBody','ابحث عن مريض أو قسم أو حالة متابعة…');
     $('exportFollowupCsv')?.addEventListener('click',()=>{
@@ -990,6 +1183,18 @@
     attachTableSearch('sectionBody','ابحث في سجل العمليات…');
   }
 
+  // PWA: manifest وأيقونات تُنشأ من داخل الصفحة نفسها حتى يبقى المشروع ملف index.html واحدًا
+  function setupPwa(){
+    try{
+      const icon=size=>{const c=document.createElement('canvas');c.width=c.height=size;const x=c.getContext('2d');x.fillStyle='#0f766e';x.fillRect(0,0,size,size);x.fillStyle='#ffffff';x.font=`900 ${Math.round(size*0.52)}px system-ui,Tahoma,Arial`;x.textAlign='center';x.textBaseline='middle';x.fillText('س',size/2,size*0.53);return c.toDataURL('image/png');};
+      const i192=icon(192),i512=icon(512);
+      const base=location.origin+location.pathname;
+      const manifest={name:'مركز سند للعلاج الطبيعي والتأهيل',short_name:'مركز سند',lang:'ar',dir:'rtl',start_url:base,scope:base.replace(/[^/]*$/,''),display:'standalone',background_color:'#f3f7f6',theme_color:'#0f766e',icons:[{src:i192,sizes:'192x192',type:'image/png',purpose:'any maskable'},{src:i512,sizes:'512x512',type:'image/png',purpose:'any maskable'}]};
+      const link=document.createElement('link');link.rel='manifest';link.href=URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:'application/manifest+json'}));document.head.appendChild(link);
+      const apple=document.createElement('link');apple.rel='apple-touch-icon';apple.href=i192;document.head.appendChild(apple);
+      const fav=document.createElement('link');fav.rel='icon';fav.type='image/png';fav.href=i192;document.head.appendChild(fav);
+    }catch(e){console.warn('PWA setup skipped',e);}
+  }
   $('forgotPasswordBtn').addEventListener('click',async()=>{
     const email=$('email').value.trim();
     if(!email){msg($('loginMessage'),'اكتب البريد الإلكتروني المسجل في الحساب أولًا.');$('email').focus();return;}
@@ -1018,6 +1223,16 @@
   });
   $('logoutBtn').addEventListener('click',async()=>{await sb.auth.signOut();state.user=null;state.profile=null;$('appView').classList.add('hidden');$('loginView').classList.remove('hidden');$('logoutBtn').classList.add('hidden');$('rolePill').classList.add('hidden');$('password').value='';msg($('loginMessage'),'تم تسجيل الخروج.','success');});
   $('refreshBtn').addEventListener('click',()=>showPage(state.page));
+  $('sectionBody').addEventListener('click',async e=>{
+    const b=e.target.closest('[data-delete]');if(!b||!isAdmin())return;
+    const kind=b.dataset.delete,id=b.dataset.id;let ok=false;
+    b.disabled=true;
+    try{ok=kind==='patient'?await deletePatient(id,b.dataset.name):kind==='appointment'?await deleteAppointment(id):kind==='package'?await deletePackage(id):false;}
+    catch(err){alert('تعذر الحذف: '+(err?.message||err));}
+    finally{b.disabled=false;}
+    if(ok)showPage(state.page);
+  });
+  setupPwa();
   if(window.location.hash.includes('type=recovery')){showRecoveryForm();} else {sb.auth.getSession().then(async({data})=>{if(data.session){try{await enterApp(data.session.user);}catch(e){await sb.auth.signOut();msg($('loginMessage'),e.message||'تعذر استعادة الجلسة.');}}});}
 })();
 </script>
