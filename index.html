@@ -1113,7 +1113,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     if(error){$('sectionBody').innerHTML=`<div class="notice error">تعذر تحميل الباقات: ${esc(error.message)}</div><p class="muted small">تأكد من صلاحيات قراءة الباقات وView الملخص.</p>`;return;}
     const rows=data||[];
     let activeApprovals=[];
-    if(isAdmin()&&rows.length){
+    if(isRole('admin','secretary')&&rows.length){
       const approvalResult=await sb.from('sanad_package_usage_approvals').select('id,package_id,reason,approved_at,paid_amount_at_approval,remaining_amount_at_approval').is('revoked_at',null).in('package_id',rows.map(p=>p.package_id));
       if(approvalResult.error){$('sectionBody').innerHTML=`<div class="notice error">تعذر تحميل موافقات استخدام الباقات: ${esc(approvalResult.error.message)}</div>`;return;}
       activeApprovals=approvalResult.data||[];
