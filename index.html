@@ -289,7 +289,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     const todayBounds=cairoDayBounds();
     let apptQ=sb.from('sanad_calendar_appointments').select('id',{count:'exact',head:true}).gte('appointment_at',todayBounds.start).lt('appointment_at',todayBounds.end);
     let managerPatientCount;
-    if(role==='technical_manager' && state.managerDepartments.length){
+    if(['technical_manager','therapist'].includes(role) && state.managerDepartments.length){
       apptQ=apptQ.in('department_id',state.managerDepartments);
       const links=await sb.from('patient_departments').select('patient_id').in('department_id',state.managerDepartments);
       managerPatientCount=links.error?null:new Set((links.data||[]).map(x=>x.patient_id)).size;
@@ -417,7 +417,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       return `<form class="manager-card" data-manager-form="${esc(m.user_id)}"><div class="manager-head"><div><strong>${esc(m.full_name||'مدير فني بدون اسم')}</strong><div class="muted small">${m.is_active===false?'الحساب موقوف':'حساب نشط'}</div></div><button class="btn" type="submit">حفظ الأقسام</button></div><div class="check-grid">${state.departments.map(d=>`<label class="check-item"><input type="checkbox" name="department_id" value="${esc(d.id)}" ${current.has(d.id)?'checked':''}><span>${esc(d.name)}</span></label>`).join('')}</div><div data-manager-message class="small" aria-live="polite"></div></form>`;
     }).join(''):'<div class="empty">لا يوجد مديرو أقسام حاليًا.</div>';
     const employeeRows=employees.length?`<div class="table-wrap"><table><thead><tr><th>اسم الموظف</th><th>المسمى الوظيفي</th><th>الأقسام</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody>${employees.map(x=>{const names=employeeLinks.filter(l=>l.employee_id===x.id).map(l=>deptName(l.department_id));if(x.primary_department_id&&!names.includes(deptName(x.primary_department_id)))names.unshift(deptName(x.primary_department_id));return `<tr><td>${esc(x.full_name)}</td><td>${esc(x.job_title||'—')}</td><td>${esc(names.join('، ')||'—')}</td><td><span class="badge ${x.is_active===false?'cancelled':''}">${x.is_active===false?'غير نشط':'نشط'}</span></td><td><div class="toolbar"><button class="btn secondary" type="button" data-edit-employee="${esc(x.id)}">تعديل</button><button class="btn ${x.is_active===false?'secondary':'danger'}" type="button" data-toggle-employee="${esc(x.id)}" data-active="${x.is_active===false?'false':'true'}">${x.is_active===false?'تفعيل':'إيقاف'}</button></div></td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty">لا توجد ملفات موظفين مسجلة بعد. ابدأ بإضافة طبيب تجريبي لاختبار الكلندر.</div>';
-    setPage('ملفات الموظفين والأطباء',`<h4>حسابات الدخول والصلاحيات</h4><div class="analysis-note"><strong>طريقة إنشاء حساب دخول جديد:</strong> أنشئ المستخدم أولًا من لوحة Supabase ‏(Authentication ← Users ← Add User)‏ بالبريد وكلمة المرور، ثم انسخ معرف المستخدم ‏(User UID)‏ والصقه في النموذج بالأسفل لربطه بالدور والقسم. لا يمكن إنشاء مستخدمي Auth من داخل هذه الصفحة حفاظًا على أمان جلستك.</div>${profileRows}<h4 style="margin-top:18px">ربط حساب دخول بملف موظف</h4><form id="staffProfileForm"><div class="form-grid"><div class="field"><label>معرف المستخدم ‏(User UID)‏ *</label><input name="user_id" required maxlength="40" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" style="direction:ltr;text-align:left"></div><div class="field"><label>اسم الموظف *</label><input name="full_name" required maxlength="120" placeholder="الاسم كما يظهر في التقارير"></div><div class="field"><label>الدور / الصلاحية *</label><select name="role" required>${roleOptions.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></div><div class="field"><label>القسم الأساسي (مطلوب لمدير القسم والمعالج)</label><select name="department_id"><option value="">بدون قسم أساسي</option>${state.departments.map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label class="check-item"><input type="checkbox" name="is_active" checked> الحساب نشط</label></div></div><div class="toolbar"><button class="btn" type="submit">حفظ / ربط الحساب</button></div><div id="staffProfileMessage"></div></form><h4 style="margin-top:24px">توزيع الأقسام على المديرين الفنيين والأطباء أصحاب الحسابات</h4>${managerSection}<hr style="border:0;border-top:1px solid var(--line);margin:26px 0"><h4>ملفات الموظفين (بدون حساب دخول)</h4><p class="muted">سجّل الأطباء والمعالجين وباقي العاملين هنا. لا يحتاج هذا الملف إلى بريد إلكتروني أو User UID أو كلمة مرور. يمكن ربط الموظف بأكثر من قسم.</p><form id="employeeForm"><input type="hidden" name="id"><div class="form-grid"><div class="field"><label>اسم الموظف *</label><input name="full_name" maxlength="120" required placeholder="اسم الطبيب أو الموظف"></div><div class="field"><label>المسمى الوظيفي *</label><input name="job_title" maxlength="100" required placeholder="طبيب علاج طبيعي / أخصائي تخاطب…"></div><div class="field"><label>القسم الأساسي</label><select name="primary_department_id"><option value="">بدون قسم أساسي</option>${state.departments.map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label>ملاحظات (اختياري)</label><input name="notes" maxlength="500" placeholder="ملاحظات إدارية مختصرة"></div></div><label style="font-weight:700;font-size:13px">الأقسام التي يعمل بها الموظف *</label><div class="check-grid">${state.departments.map(d=>`<label class="check-item"><input type="checkbox" name="department_id" value="${esc(d.id)}"><span>${esc(d.name)}</span></label>`).join('')}</div><div class="field"><label class="check-item"><input type="checkbox" name="is_active" checked> الموظف نشط</label></div><div class="toolbar"><button class="btn" type="submit">حفظ ملف الموظف</button><button class="btn ghost" type="reset" id="resetEmployeeForm">تفريغ النموذج</button></div><div id="employeeMessage"></div></form><h4 style="margin-top:22px">الموظفون المسجلون (${employees.length})</h4>${employeeRows}`);
+    setPage('ملفات الموظفين والأطباء',`<h4>حسابات الدخول والصلاحيات</h4><p class="muted">أنشئ حساب الموظف مباشرة من هنا. يُنشأ حساب Auth ويرتبط بالدور والأقسام تلقائيًا، دون الحاجة لنسخ User UID من لوحة Supabase.</p><form id="createStaffUserForm"><div class="form-grid"><div class="field"><label>البريد الإلكتروني *</label><input name="email" type="email" required maxlength="254" autocomplete="off" placeholder="staff@example.com"></div><div class="field"><label>كلمة المرور المؤقتة *</label><input name="password" type="password" required minlength="8" maxlength="72" autocomplete="new-password" placeholder="8 أحرف على الأقل"></div><div class="field"><label>تأكيد كلمة المرور *</label><input name="password_confirm" type="password" required minlength="8" maxlength="72" autocomplete="new-password" placeholder="أعد كتابة كلمة المرور"></div><div class="field"><label>اسم الموظف *</label><input name="full_name" required maxlength="120" placeholder="الاسم كما يظهر في النظام"></div><div class="field"><label>الدور / الصلاحية *</label><select name="role" required>${roleOptions.map(([v,l])=>'<option value="'+esc(v)+'">'+esc(l)+'</option>').join('')}</select></div></div><div class="field"><label>الأقسام المخصصة للحساب</label><div class="check-grid">${state.departments.map(d=>'<label class="check-item"><input type="checkbox" name="department_id" value="'+esc(d.id)+'"><span>'+esc(d.name)+'</span></label>').join('')}</div><small class="muted">اختيار قسم واحد على الأقل إلزامي لمدير القسم والمعالج. بقية الأدوار يمكن أن تعمل دون قسم.</small></div><div class="toolbar"><button class="btn" type="submit">إنشاء حساب الدخول وربطه</button></div><div id="staffUserMessage" aria-live="polite"></div></form><div class="analysis-note">تسجيل الدخول الحالي بالبريد الإلكتروني وكلمة المرور. اسم مستخدم مستقل بدل البريد غير مفعّل حتى الآن.</div>${profileRows}<h4 style="margin-top:18px">توزيع الأقسام على المديرين الفنيين والأطباء أصحاب الحسابات</h4>${managerSection}<hr style="border:0;border-top:1px solid var(--line);margin:26px 0"><h4>ملفات الموظفين (بدون حساب دخول)</h4><p class="muted">سجّل الأطباء والمعالجين وباقي العاملين هنا. لا يحتاج هذا الملف إلى بريد إلكتروني أو User UID أو كلمة مرور. يمكن ربط الموظف بأكثر من قسم.</p><form id="employeeForm"><input type="hidden" name="id"><div class="form-grid"><div class="field"><label>اسم الموظف *</label><input name="full_name" maxlength="120" required placeholder="اسم الطبيب أو الموظف"></div><div class="field"><label>المسمى الوظيفي *</label><input name="job_title" maxlength="100" required placeholder="طبيب علاج طبيعي / أخصائي تخاطب…"></div><div class="field"><label>القسم الأساسي</label><select name="primary_department_id"><option value="">بدون قسم أساسي</option>${state.departments.map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label>ملاحظات (اختياري)</label><input name="notes" maxlength="500" placeholder="ملاحظات إدارية مختصرة"></div></div><label style="font-weight:700;font-size:13px">الأقسام التي يعمل بها الموظف *</label><div class="check-grid">${state.departments.map(d=>`<label class="check-item"><input type="checkbox" name="department_id" value="${esc(d.id)}"><span>${esc(d.name)}</span></label>`).join('')}</div><div class="field"><label class="check-item"><input type="checkbox" name="is_active" checked> الموظف نشط</label></div><div class="toolbar"><button class="btn" type="submit">حفظ ملف الموظف</button><button class="btn ghost" type="reset" id="resetEmployeeForm">تفريغ النموذج</button></div><div id="employeeMessage"></div></form><h4 style="margin-top:22px">الموظفون المسجلون (${employees.length})</h4>${employeeRows}`);
     const employeeForm=$('employeeForm');
     employeeForm?.addEventListener('reset',()=>{setTimeout(()=>{employeeForm.querySelector('[name=id]').value='';employeeForm.querySelectorAll('input[name=department_id]').forEach(x=>x.checked=false);},0);});
     employeeForm?.addEventListener('submit',async e=>{
@@ -425,30 +425,36 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       if(!selected.length){msg($('employeeMessage'),'اختر قسمًا واحدًا على الأقل للموظف.');return;}
       if(primary&&!selected.includes(primary)){msg($('employeeMessage'),'القسم الأساسي يجب أن يكون ضمن الأقسام المحددة للموظف.');return;}
       const id=String(f.get('id')||'').trim();const payload={full_name:fullName,job_title:jobTitle,primary_department_id:primary,is_active:f.get('is_active')==='on',notes:String(f.get('notes')||'').trim()||null};if(!id)payload.created_by=state.user.id;const btn=e.currentTarget.querySelector('button[type=submit]');btn.disabled=true;
-      let saved;if(id)saved=await sb.from('sanad_employees').update(payload).eq('id',id).select('id').single();else saved=await sb.from('sanad_employees').insert(payload).select('id').single();
-      if(saved.error){btn.disabled=false;msg($('employeeMessage'),'تعذر حفظ ملف الموظف: '+saved.error.message);return;}
-      const employeeId=saved.data.id;
-      // تحديث الروابط بالفرق: لا نحذف كل الروابط ثم نعيد إدخالها حتى لا يفقد الموظف أقسامه عند أي خطأ لحظي
-      const linksNow=await sb.from('sanad_employee_departments').select('department_id').eq('employee_id',employeeId);
-      if(linksNow.error){btn.disabled=false;msg($('employeeMessage'),'تم حفظ بيانات الموظف، لكن تعذر قراءة روابط الأقسام الحالية: '+linksNow.error.message);return;}
-      const currentIds=(linksNow.data||[]).map(x=>x.department_id);
-      const toAdd=selected.filter(d=>!currentIds.includes(d)),toRemove=currentIds.filter(d=>!selected.includes(d));
-      for(const department_id of toRemove){const del=await sb.from('sanad_employee_departments').delete().eq('employee_id',employeeId).eq('department_id',department_id);if(del.error){btn.disabled=false;msg($('employeeMessage'),'تم حفظ الملف، لكن تعذر إزالة ربط قسم: '+del.error.message);return;}}
-      if(toAdd.length){const linked=await sb.from('sanad_employee_departments').insert(toAdd.map(department_id=>({employee_id:employeeId,department_id})));if(linked.error){btn.disabled=false;msg($('employeeMessage'),'تم حفظ الملف، لكن تعذر ربط الأقسام الجديدة: '+linked.error.message);return;}}
-      msg($('employeeMessage'),'تم حفظ ملف الموظف وربطه بالأقسام بنجاح.','success');await staffAccessPage();
+      const saved=await sb.rpc('sanad_save_employee_with_departments',{p_employee_id:id||null,p_full_name:fullName,p_job_title:jobTitle,p_primary_department_id:primary,p_department_ids:selected,p_is_active:f.get('is_active')==='on',p_notes:String(f.get('notes')||'').trim()||null});
+      btn.disabled=false;
+      if(saved.error){msg($('employeeMessage'),'تعذر حفظ ملف الموظف وأقسامه: '+saved.error.message);return;}
+      msg($('employeeMessage'),'تم حفظ ملف الموظف وجميع أقسامه في عملية واحدة.','success');await staffAccessPage();
     });
     $('sectionBody').querySelectorAll('[data-edit-employee]').forEach(btn=>btn.addEventListener('click',()=>{const x=employees.find(y=>y.id===btn.dataset.editEmployee);if(!x)return;const f=$('employeeForm');f.elements.id.value=x.id;f.elements.full_name.value=x.full_name||'';f.elements.job_title.value=x.job_title||'';f.elements.primary_department_id.value=x.primary_department_id||'';f.elements.notes.value=x.notes||'';f.elements.is_active.checked=x.is_active!==false;const selected=new Set(employeeLinks.filter(l=>l.employee_id===x.id).map(l=>l.department_id));if(x.primary_department_id)selected.add(x.primary_department_id);f.querySelectorAll('input[name=department_id]').forEach(c=>c.checked=selected.has(c.value));f.scrollIntoView({behavior:'smooth',block:'start'});}));
     $('sectionBody').querySelectorAll('[data-toggle-employee]').forEach(btn=>btn.addEventListener('click',async()=>{const next=btn.dataset.active!=='false'?false:true;btn.disabled=true;const {error}=await sb.from('sanad_employees').update({is_active:next}).eq('id',btn.dataset.toggleEmployee);if(error){btn.disabled=false;alert('تعذر تحديث حالة الموظف: '+error.message);return;}await staffAccessPage();}));
-    $('staffProfileForm')?.addEventListener('submit',async e=>{
-      e.preventDefault();const f=new FormData(e.currentTarget);const userId=String(f.get('user_id')||'').trim();const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-      if(!uuid.test(userId)){msg($('staffProfileMessage'),'معرف المستخدم يجب أن يكون UUID صحيحًا من Supabase Auth.');return;}
-      const role=String(f.get('role'));const departmentId=String(f.get('department_id')||'')||null;
-      if(['technical_manager','therapist'].includes(role)&&!departmentId){msg($('staffProfileMessage'),'اختر القسم الأساسي للمدير الفني، ويمكنك إضافة أقسام أخرى من جزء توزيع المديرين.');return;}
-      const payload={user_id:userId,full_name:String(f.get('full_name')||'').trim(),role,department_id:departmentId,is_active:f.get('is_active')==='on'};
-      const btn=e.currentTarget.querySelector('button[type=submit]');btn.disabled=true;
-      const {error}=await sb.from('staff_profiles').upsert(payload,{onConflict:'user_id'});btn.disabled=false;
-      if(error){msg($('staffProfileMessage'),'تعذر حفظ ملف الموظف: '+error.message);return;}
-      await staffAccessPage();msg($('staffProfileMessage'),'تم حفظ ملف الموظف وربطه بالحساب.','success');
+    $('createStaffUserForm')?.addEventListener('submit',async e=>{
+      e.preventDefault();
+      const form=e.currentTarget,fd=new FormData(form);
+      const email=String(fd.get('email')||'').trim().toLowerCase();
+      const password=String(fd.get('password')||'');
+      const fullName=String(fd.get('full_name')||'').trim();
+      const role=String(fd.get('role')||'');
+      const departmentIds=[...form.querySelectorAll('input[name="department_id"]:checked')].map(x=>x.value);
+      if(password.length<8){msg($('staffUserMessage'),'كلمة المرور يجب ألا تقل عن 8 أحرف.');return;}
+      if(password!==String(fd.get('password_confirm')||'')){msg($('staffUserMessage'),'تأكيد كلمة المرور غير مطابق.');return;}
+      if(!fullName||!email){msg($('staffUserMessage'),'أدخل البريد الإلكتروني واسم الموظف.');return;}
+      if(['technical_manager','therapist'].includes(role)&&!departmentIds.length){msg($('staffUserMessage'),'اختر قسمًا واحدًا على الأقل لمدير القسم أو المعالج.');return;}
+      const button=form.querySelector('button[type=submit]');button.disabled=true;
+      const {data,error}=await sb.functions.invoke('sanad-create-staff-user',{body:{email,password,full_name:fullName,role,department_ids:departmentIds}});
+      button.disabled=false;
+      if(error){
+        let message=error.message||'تعذر إنشاء الحساب.';
+        try{const body=await error.context?.json();if(body?.error)message=body.error;}catch(_){}
+        msg($('staffUserMessage'),'تعذر إنشاء حساب الدخول: '+message);return;
+      }
+      if(data?.error){msg($('staffUserMessage'),'تعذر إنشاء حساب الدخول: '+data.error);return;}
+      await staffAccessPage();
+      msg($('staffUserMessage'),'تم إنشاء الحساب وربطه بنجاح: '+(data?.email||email)+' — UID: '+(data?.user_id||'تم الربط'),'success');
     });
     $('sectionBody').querySelectorAll('[data-toggle-staff]').forEach(btn=>btn.addEventListener('click',async()=>{
       const next=btn.dataset.active!=='false'?false:true;btn.disabled=true;
@@ -459,13 +465,10 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       e.preventDefault();const target=e.currentTarget,userId=target.dataset.managerForm;const selected=[...target.querySelectorAll('input[name=department_id]:checked')].map(x=>x.value);const output=target.querySelector('[data-manager-message]');
       if(!selected.length){msg(output,'اختر قسمًا واحدًا على الأقل قبل الحفظ.');return;}
       const button=target.querySelector('button[type=submit]');button.disabled=true;output.innerHTML='';
-      const upsert=await sb.from('staff_department_access').upsert(selected.map(department_id=>({user_id:userId,department_id})),{onConflict:'user_id,department_id'});
-      if(upsert.error){button.disabled=false;msg(output,'تعذر حفظ الأقسام: '+upsert.error.message);return;}
-      const primaryUpdate=await sb.from('staff_profiles').update({department_id:selected[0]}).eq('user_id',userId);
-      if(primaryUpdate.error){button.disabled=false;msg(output,'تم حفظ روابط الأقسام، لكن تعذر تحديث القسم الأساسي: '+primaryUpdate.error.message);return;}
-      const old=links.filter(x=>x.user_id===userId).map(x=>x.department_id);
-      for(const departmentId of old.filter(id=>!selected.includes(id))){const removed=await sb.from('staff_department_access').delete().eq('user_id',userId).eq('department_id',departmentId);if(removed.error){button.disabled=false;msg(output,'تم حفظ الاختيارات، لكن تعذر إزالة قسم قديم: '+removed.error.message);return;}}
-      button.disabled=false;msg(output,'تم حفظ ربط المدير الفني بالأقسام المحددة.','success');
+      const result=await sb.rpc('sanad_set_staff_department_access',{p_user_id:userId,p_department_ids:selected});
+      button.disabled=false;
+      if(result.error){msg(output,'تعذر حفظ صلاحيات الأقسام: '+result.error.message);return;}
+      msg(output,'تم حفظ جميع الأقسام والقسم الأساسي في عملية واحدة.','success');
     }));
     attachTableSearch('sectionBody','ابحث باسم الموظف أو المسمى الوظيفي أو القسم…');
   }
@@ -530,15 +533,21 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     if(state.profile.role==='technical_manager')aq=aq.in('department_id',state.managerDepartments);
     const none={data:[],error:null};
     const clinicalEnabled=state.profile.role==='technical_manager';
-    const [pRes,lRes,aRes,kRes,payRes,medicalRes,sessionsRes]=await Promise.all([
+    const [pRes,lRes,aRes,kRes,payRes,medicalRes,sessionsRes,accountChargesRes,accountReceiptsRes,refundsRes]=await Promise.all([
       sb.from('patients').select('id,file_number,full_name,phone,sex,department_id,date_of_birth,guardian_name,address,notes,is_active,created_at').eq('id',patientId).maybeSingle(),
       sb.from('patient_departments').select('department_id').eq('patient_id',patientId),
       aq,
       showMoney?sb.from('sanad_package_summary').select('*').eq('patient_id',patientId).order('purchased_at',{ascending:false}):Promise.resolve(none),
       showMoney?sb.from('package_payments').select('id,package_id,amount,payment_method,payment_date,reference_number,voided_at,void_reason').eq('patient_id',patientId).order('payment_date',{ascending:false}):Promise.resolve(none),
       clinicalEnabled?sb.from('patient_medical_records').select('id,diagnosis,chief_complaint,medical_history,previous_surgeries,medications,allergies,initial_assessment,treatment_goals,treatment_plan,clinical_notes,updated_at').eq('patient_id',patientId).maybeSingle():Promise.resolve(none),
-      clinicalEnabled?sb.from('therapy_sessions').select('id,department_id,session_date,duration_minutes,treatment_provided,patient_response,home_program,therapist_id,calendar_appointment_id,voided_at,void_reason').eq('patient_id',patientId).in('department_id',state.managerDepartments).order('session_date',{ascending:false}).limit(300):Promise.resolve(none)
+      clinicalEnabled?sb.from('therapy_sessions').select('id,department_id,session_date,duration_minutes,treatment_provided,patient_response,home_program,therapist_id,calendar_appointment_id,voided_at,void_reason').eq('patient_id',patientId).in('department_id',state.managerDepartments).order('session_date',{ascending:false}).limit(300):Promise.resolve(none),
+      showMoney?sb.from('sanad_patient_account_statement').select('charge_id,patient_id,department_id,department_name,calendar_appointment_id,therapy_session_id,charge_amount,paid_amount,remaining_amount,charge_date,session_date,therapist_id,therapist_name,voided_at').eq('patient_id',patientId).order('charge_date',{ascending:true}):Promise.resolve(none),
+      showMoney?sb.from('patient_account_receipts').select('id,patient_id,calendar_appointment_id,amount,payment_method,payment_date,notes,created_at').eq('patient_id',patientId).order('payment_date',{ascending:true}):Promise.resolve(none),
+      showMoney?sb.from('patient_session_refunds').select('id,appointment_id,amount,refund_method,refund_reference,proof_notes,refunded_at,created_by').eq('patient_id',patientId).order('refunded_at',{ascending:false}):Promise.resolve(none)
     ]);
+    const accountAllocationsRes=showMoney&&(accountReceiptsRes.data||[]).length
+      ?await sb.from('patient_account_payment_allocations').select('id,receipt_id,charge_id,amount,voided_at,void_reason').in('receipt_id',accountReceiptsRes.data.map(x=>x.id)).order('created_at',{ascending:true})
+      :none;
     if(pRes.error||!pRes.data){setPage('ملف المريض',`<div class="notice error">تعذر تحميل الملف: ${esc(pRes.error?.message||'المريض غير موجود أو لا تملك صلاحية عرضه')}</div>`,actions);wire();return;}
     const p=pRes.data;
     const deptIds=[...new Set([...(lRes.data||[]).map(x=>x.department_id),p.department_id].filter(Boolean))];
@@ -548,9 +557,13 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     const completed=appts.filter(a=>a.status==='completed').length;
     const upcoming=appts.filter(a=>!['cancelled','completed','no_show'].includes(a.status)&&new Date(a.appointment_at).getTime()>=Date.now()).length;
     const sessionCollections=appts.filter(a=>a.status==='completed'&&Number(a.collected_amount||0)>0);
-    const paidPackages=pays.filter(x=>!x.voided_at).reduce((n,x)=>n+Number(x.amount||0),0),paidSessions=sessionCollections.reduce((n,x)=>n+Number(x.collected_amount||0),0);
+    const paidPackages=pays.filter(x=>!x.voided_at).reduce((n,x)=>n+Number(x.amount||0),0);
+    const ledgerAppointmentIdsForTotals=new Set((accountChargesRes.data||[]).map(x=>x.calendar_appointment_id).filter(Boolean));
+    const activeLedgerReceipts=(accountAllocationsRes.data||[]).filter(x=>!x.voided_at).reduce((n,x)=>n+Number(x.amount||0),0);
+    const legacyPaidSessions=sessionCollections.filter(a=>!ledgerAppointmentIdsForTotals.has(a.id)).reduce((n,x)=>n+Number(x.collected_amount||0),0);
+    const paidSessions=activeLedgerReceipts+legacyPaidSessions;
     const pkgName=id=>pkgs.find(x=>x.package_id===id)?.package_name||'باقة';
-    const errs=[aRes,kRes,payRes,medicalRes,sessionsRes].filter(x=>x.error).map(x=>x.error.message);
+    const errs=[aRes,kRes,payRes,medicalRes,sessionsRes,accountChargesRes,accountReceiptsRes,accountAllocationsRes].filter(x=>x.error).map(x=>x.error.message);
     const info=(l,v)=>`<div class="info-item"><small>${l}</small><div>${v}</div></div>`;
     const sexLabel=({male:'ذكر',female:'أنثى'})[p.sex]||'—';
     const apptTable=appts.length?`<div class="table-wrap"><table><thead><tr><th>التاريخ والوقت</th><th>القسم</th><th>المعالج</th><th>النوع</th><th>الحالة</th>${showMoney?'<th>سعر الجلسة</th><th>المحصل</th>':''}</tr></thead><tbody>${appts.map(a=>`<tr><td>${fmt(a.appointment_at)}</td><td>${esc(deptName(a.department_id))}</td><td>${esc(staffName(a.therapist_id))}</td><td>${a.appointment_type==='assessment'?'كشف':'جلسة'}${a.package_id?' (باقة)':''}</td><td><span class="badge ${['cancelled','no_show'].includes(a.status)?'cancelled':a.status==='pending'?'pending':''}">${esc(statusName(a.status))}</span></td>${showMoney?`<td>${a.session_price!=null?money(a.session_price):'—'}</td><td>${a.status==='completed'&&a.collected_amount!=null?money(a.collected_amount):'—'}</td>`:''}</tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد مواعيد مسجلة لهذا المريض.</div>';
@@ -571,13 +584,31 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       const moves=[...pays.map(x=>({date:x.payment_date,kind:'دفعة باقة — '+pkgName(x.package_id),amount:x.amount,method:x.payment_method,ref:x.reference_number,voided:!!x.voided_at,reason:x.void_reason,payId:x.id})),...sessionCollections.map(a=>{const eid=entryByAppt[a.id]||null;return {date:a.appointment_at,kind:'جلسة فردية — '+deptName(a.department_id),amount:a.collected_amount,method:a.payment_method,ref:'',voided:eid?reversedEntries.has(eid):false,reason:'',entryId:eid};})].sort((a,b)=>new Date(b.date)-new Date(a.date));
       const moveAction=x=>x.voided?'—':x.payId?`<button class="btn danger" data-file-void-payment="${esc(x.payId)}" type="button">حذف الدفعة</button>`:x.entryId?`<button class="btn danger" data-file-void-entry="${esc(x.entryId)}" type="button">حذف الإيراد</button>`:'—';
       const moveTable=moves.length?`<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>البيان</th><th>المبلغ</th><th>طريقة الدفع</th><th>المرجع</th><th>الحالة</th>${canVoidMoney?'<th>إجراء</th>':''}</tr></thead><tbody>${moves.map(x=>`<tr><td>${fmt(x.date)}</td><td>${esc(x.kind)}</td><td>${money(x.amount)}</td><td>${esc(method[x.method]||x.method||'—')}</td><td>${esc(x.ref||'—')}</td><td>${x.voided?`<span class="badge danger">محذوفة — غير محسوبة</span><div class="muted small">${esc(x.reason||'')}</div>`:'<span class="badge">سارية</span>'}</td>${canVoidMoney?`<td>${moveAction(x)}</td>`:''}</tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد مدفوعات مسجلة.</div>';
-      // كشف الحساب: مستحقات (باقات + جلسات فردية) مقابل المدفوع
+      // كشف الحساب: الباقات منفصلة، والجلسات الفردية والتحصيلات من دفتر المديونيات المعتمد.
       pkgs.forEach(k=>{if(k.status!=='cancelled'||Number(k.total_paid||0)>0)stmtRows.push({date:k.purchased_at||k.created_at||null,label:'باقة — '+k.package_name,type:'package',charge:Number(k.package_total||0),paid:0,voided:false});});
       pays.forEach(x=>stmtRows.push({date:x.payment_date,label:'دفعة باقة — '+pkgName(x.package_id)+(x.reference_number?' ('+x.reference_number+')':''),type:'payment',charge:0,paid:Number(x.amount||0),voided:!!x.voided_at}));
-      appts.filter(a=>a.status==='completed'&&!a.package_id&&a.appointment_type!=='assessment').forEach(a=>{const eid=entryByAppt[a.id];stmtRows.push({date:a.appointment_at,label:'جلسة فردية — '+deptName(a.department_id),type:'session',charge:Number(a.session_price||0),paid:Number(a.collected_amount||0),voided:eid?reversedEntries.has(eid):false});});
+      const ledgerCharges=accountChargesRes.data||[],ledgerReceipts=accountReceiptsRes.data||[],ledgerAllocations=accountAllocationsRes.data||[];
+      const chargeById=Object.fromEntries(ledgerCharges.map(x=>[x.charge_id,x]));
+      const allocatedByReceipt={};
+      ledgerAllocations.filter(x=>!x.voided_at).forEach(x=>{(allocatedByReceipt[x.receipt_id]??=[]).push(x);});
+      const ledgerAppointmentIds=new Set(ledgerCharges.map(x=>x.calendar_appointment_id).filter(Boolean));
+      ledgerCharges.forEach(x=>stmtRows.push({date:x.session_date||x.charge_date,label:'جلسة فردية — '+(x.department_name||deptName(x.department_id))+(x.therapist_name?' — '+x.therapist_name:''),type:'session',charge:Number(x.charge_amount||0),paid:0,voided:!!x.voided_at,chargeId:x.charge_id,appointmentId:x.calendar_appointment_id}));
+      ledgerReceipts.forEach(receipt=>{
+        const allocations=allocatedByReceipt[receipt.id]||[];
+        if(allocations.length){
+          allocations.forEach(allocation=>{
+            const charge=chargeById[allocation.charge_id];
+            stmtRows.push({date:receipt.payment_date,label:'تحصيل مديونية — '+(charge?.department_name||'قسم غير محدد')+(receipt.notes?' — '+receipt.notes:''),type:'payment',charge:0,paid:Number(allocation.amount||0),voided:false,receiptId:receipt.id,allocationId:allocation.id});
+          });
+        }else{
+          stmtRows.push({date:receipt.payment_date,label:'إيصال تحصيل غير موزع — القيمة الأصلية '+money(receipt.amount)+' (غير محسوب ضمن المدفوع)'+(receipt.notes?' — '+receipt.notes:''),type:'payment',charge:0,paid:0,voided:false,receiptId:receipt.id,unallocated:Number(receipt.amount||0)});
+        }
+      });
+      // توافق تاريخي فقط: لا نكرر أي جلسة موجودة بالفعل في دفتر المديونيات.
+      appts.filter(a=>a.status==='completed'&&!a.package_id&&a.appointment_type!=='assessment'&&!ledgerAppointmentIds.has(a.id)).forEach(a=>{const eid=entryByAppt[a.id];stmtRows.push({date:a.appointment_at,label:'جلسة فردية — '+deptName(a.department_id)+' (سجل قديم)',type:'session',charge:Number(a.session_price||0),paid:Number(a.collected_amount||0),voided:eid?reversedEntries.has(eid):false});});
       stmtInfo={remainingSessions:pkgs.filter(k=>k.status==='active').reduce((n,k)=>n+Number(k.remaining_sessions||0),0)};
-      const statementHtml=`<h4 style="margin-top:22px">كشف حساب المريض</h4><div id="stmtSummary"></div><div class="chart-filters"><div class="field"><label>من تاريخ</label><input type="date" id="stmtFrom"></div><div class="field"><label>إلى تاريخ</label><input type="date" id="stmtTo"></div><div class="field"><label>النوع</label><select id="stmtType"><option value="all">الكل</option><option value="package">الباقات</option><option value="payment">دفعات الباقات</option><option value="session">الجلسات الفردية</option></select></div><button class="btn secondary" id="stmtPrint" type="button">طباعة / حفظ PDF</button></div><div id="stmtBody"></div>`;
-      money_html=`<h4 style="margin-top:22px">الباقات</h4>${pkgTable}<h4 style="margin-top:22px">المعاملات المالية (${moves.length})</h4>${moveTable}${statementHtml}`;
+      const statementHtml=`<h4 style="margin-top:22px">كشف حساب المريض</h4><div id="stmtSummary"></div><div class="chart-filters"><div class="field"><label>من تاريخ</label><input type="date" id="stmtFrom"></div><div class="field"><label>إلى تاريخ</label><input type="date" id="stmtTo"></div><div class="field"><label>النوع</label><select id="stmtType"><option value="all">الكل</option><option value="package">الباقات</option><option value="payment">دفعات الباقات والتحصيلات</option><option value="session">الجلسات الفردية</option></select></div><button class="btn secondary" id="stmtPrint" type="button">طباعة / حفظ PDF</button></div><div id="stmtBody"></div>`;
+      const refundRows=refundsRes.data||[];const refundHtml=`<h4 style="margin-top:22px">إثباتات رد مبالغ الجلسات (${refundRows.length})</h4>${refundRows.length?`<div class="table-wrap"><table><thead><tr><th>تاريخ الرد</th><th>المبلغ</th><th>الطريقة</th><th>الرقم المرجعي</th><th>الإثبات المسجل</th><th>سجل بواسطة</th></tr></thead><tbody>${refundRows.map(x=>`<tr><td>${fmt(x.refunded_at)}</td><td>${money(x.amount)}</td><td>${esc(({cash:'نقدي',card:'بطاقة',transfer:'تحويل',other:'أخرى'})[x.refund_method]||x.refund_method)}</td><td>${esc(x.refund_reference||'—')}</td><td>${esc(x.proof_notes||'—')}</td><td>${esc(x.created_by||'—')}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد مبالغ مردودة مسجلة لهذا المريض.</div>'}`;money_html=`<h4 style="margin-top:22px">الباقات</h4>${pkgTable}<h4 style="margin-top:22px">المعاملات المالية (${moves.length})</h4>${moveTable}${refundHtml}${statementHtml}`;
     }
     let clinicalHtml='';
     const clinicalFields=[['diagnosis','التشخيص'],['chief_complaint','الشكوى الرئيسية'],['medical_history','التاريخ المرضي'],['previous_surgeries','العمليات السابقة'],['medications','الأدوية الحالية'],['allergies','الحساسية'],['initial_assessment','التقييم الأولي'],['treatment_goals','الأهداف العلاجية'],['treatment_plan','الخطة العلاجية'],['clinical_notes','ملاحظات سريرية']];
@@ -599,7 +630,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       const current=()=>{const from=$('stmtFrom').value,to=$('stmtTo').value,type=$('stmtType').value;return all.filter(x=>{const d=x.date?cairoDateString(new Date(x.date)):'';return (type==='all'||x.type===type)&&(!from||(d&&d>=from))&&(!to||(d&&d<=to));});};
       const draw=()=>{$('stmtBody').innerHTML=statementTableHtml(current(),fmtDay);};
       ['stmtFrom','stmtTo','stmtType'].forEach(id=>$(id).addEventListener('change',draw));draw();
-      $('stmtPrint').addEventListener('click',()=>printStatement(p,current(),fmtDay,{from:$('stmtFrom').value,to:$('stmtTo').value},{totalCharge,totalPaid,balance}));
+      $('stmtPrint').addEventListener('click',()=>{const filtered=current();const filteredCharge=filtered.reduce((n,x)=>n+x.effCharge,0),filteredPaid=filtered.reduce((n,x)=>n+x.effPaid,0);printStatement(p,filtered,fmtDay,{from:$('stmtFrom').value,to:$('stmtTo').value},{totalCharge:filteredCharge,totalPaid:filteredPaid,balance:filteredCharge-filteredPaid});});
       $('sectionBody').querySelectorAll('[data-file-void-payment]').forEach(b=>b.addEventListener('click',()=>voidPackagePaymentById(b.dataset.fileVoidPayment,()=>patientFilePage(patientId))));
       $('sectionBody').querySelectorAll('[data-file-void-entry]').forEach(b=>b.addEventListener('click',()=>voidFinancialEntry(b.dataset.fileVoidEntry,()=>patientFilePage(patientId))));
     }
@@ -670,7 +701,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     $('todaySchedule').addEventListener('click',()=>goDay(cairoDateString()));
     $('addApptBtn')?.addEventListener('click',()=>appointmentForm());
     const bounds=cairoDayBounds(day);
-    let q=sb.from('sanad_calendar_appointments').select('id,patient_id,department_id,therapist_id,appointment_at,appointment_end_at,duration_minutes,status,notes,appointment_type,package_id,session_price,patients(full_name)').gte('appointment_at',bounds.start).lt('appointment_at',bounds.end).order('appointment_at',{ascending:true}).limit(500);
+    let q=sb.from('sanad_calendar_appointments').select('id,patient_id,department_id,therapist_id,appointment_at,appointment_end_at,duration_minutes,status,notes,appointment_type,package_id,session_price,collected_amount,patients(full_name)').gte('appointment_at',bounds.start).lt('appointment_at',bounds.end).order('appointment_at',{ascending:true}).limit(500);
     if(state.profile.role==='technical_manager'&&state.managerDepartments.length)q=q.in('department_id',state.managerDepartments);
     const [apptRes,reviewRes]=await Promise.all([q,sb.from('sanad_monthly_schedule_reviews').select('month_start,status,reviewed_at').eq('month_start',monthStart).maybeSingle()]);
     // لو المستخدم انتقل ليوم آخر أو صفحة أخرى أثناء التحميل، لا نرسم نتيجة قديمة
@@ -684,7 +715,8 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     $('sectionActions').innerHTML=editable?addBtn:'';
     $('addApptBtn')?.addEventListener('click',()=>appointmentForm());
     const cancelledCount=rows.filter(a=>a.status==='cancelled').length;
-    $('scheduleSummary').textContent=`${label} — ${rows.length-cancelledCount} موعد${cancelledCount?` · ${cancelledCount} ملغي`:''}`;
+    const noShowCount=rows.filter(a=>a.status==='no_show').length;
+    $('scheduleSummary').textContent=`${label} — ${rows.length-cancelledCount-noShowCount} موعد${cancelledCount?` · ${cancelledCount} ملغي`:''}${noShowCount?` · ${noShowCount} لم يحضر`:''}`;
     list.innerHTML=rows.length?rows.map(a=>{
       const start=new Date(a.appointment_at);
       const end=a.appointment_end_at?new Date(a.appointment_end_at):new Date(start.getTime()+Number(a.duration_minutes||45)*60000);
@@ -694,8 +726,9 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       if(editable){
         if(open)actions+=isAssess?`<button class="btn secondary" data-act="assess" data-id="${esc(a.id)}" type="button">تأكيد إتمام الكشف</button>`:`<button class="btn secondary" data-act="complete" data-id="${esc(a.id)}" type="button">إتمام الجلسة</button>`;
         if(a.status!=='completed')actions+=`<button class="btn ghost" data-act="edit" data-id="${esc(a.id)}" type="button">تعديل</button>`;
-        if(open&&!isAssess)actions+=`<button class="btn ghost" data-act="noshow" data-id="${esc(a.id)}" type="button">لم يحضر</button>`;
-        if(a.status!=='cancelled'&&a.status!=='completed')actions+=`<button class="btn danger" data-act="cancel" data-id="${esc(a.id)}" type="button">إلغاء</button>`;
+        if(a.status==='scheduled'&&!isAssess)actions+=`<button class="btn ghost" data-act="noshow" data-id="${esc(a.id)}" type="button">لم يحضر</button>`;
+        if(a.status==='scheduled')actions+=`<button class="btn danger" data-act="cancel" data-id="${esc(a.id)}" type="button">إلغاء</button>`;
+        if(isRole('admin','secretary')&&a.status==='completed'&&!isAssess)actions+=`<button class="btn danger" data-act="reverse" data-id="${esc(a.id)}" type="button">تصحيح جلسة مكتملة</button>`;
         if(isAdmin()&&a.status!=='completed')actions+=`<button class="btn danger" data-delete="appointment" data-id="${esc(a.id)}" type="button">حذف</button>`;
       }
       const badgeClass=['cancelled','no_show'].includes(a.status)?'cancelled':a.status==='pending'?'pending':'';
@@ -705,7 +738,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     list.addEventListener('click',e=>{
       const b=e.target.closest('[data-act]');if(!b)return;
       const id=b.dataset.id;
-      ({edit:()=>appointmentForm(id),cancel:()=>cancelAppointment(id),complete:()=>completeTherapyAppointment(id),assess:()=>completeAssessment(id),noshow:()=>markAppointmentNoShow(id)})[b.dataset.act]?.();
+      ({edit:()=>appointmentForm(id),cancel:()=>cancelAppointment(id),complete:()=>completeTherapyAppointment(id),assess:()=>completeAssessment(id),noshow:()=>markAppointmentNoShow(id),reverse:()=>reverseCompletedSession(id)})[b.dataset.act]?.();
     });
   }
   async function bulkSchedulePage(){
@@ -762,10 +795,10 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       const overlap=(s1,e1,s2,e2)=>s1<e2&&s2<e1;
       for(let i=0;i<prepared.length;i++){
         const a=prepared[i];
-        const clashes=prepared.slice(0,i).some(b=>a.start<b.end&&b.start<a.end)||existing.some(b=>b.therapist_id===doctorId&&b.status!=='cancelled'&&a.start<new Date(new Date(b.appointment_at).getTime()+Number(b.duration_minutes||45)*60000)&&new Date(b.appointment_at)<a.end);
+        const clashes=prepared.slice(0,i).some(b=>a.start<b.end&&b.start<a.end)||existing.some(b=>b.therapist_id===doctorId&&!['cancelled','no_show'].includes(b.status)&&a.start<new Date(new Date(b.appointment_at).getTime()+Number(b.duration_minutes||45)*60000)&&new Date(b.appointment_at)<a.end);
         if(clashes)conflicts.push(a.rowNo);
         // حماية تعارض مواعيد المريض: داخل الشيت نفسه أو مع موعد قائم لنفس المريض ولو مع دكتور آخر
-        const pClash=prepared.slice(0,i).some(b=>b.patientId===a.patientId&&overlap(a.start,a.end,b.start,b.end))||existing.some(b=>b.patient_id===a.patientId&&b.status!=='cancelled'&&overlap(a.start,a.end,new Date(b.appointment_at),new Date(new Date(b.appointment_at).getTime()+Number(b.duration_minutes||45)*60000)));
+        const pClash=prepared.slice(0,i).some(b=>b.patientId===a.patientId&&overlap(a.start,a.end,b.start,b.end))||existing.some(b=>b.patient_id===a.patientId&&!['cancelled','no_show'].includes(b.status)&&overlap(a.start,a.end,new Date(b.appointment_at),new Date(new Date(b.appointment_at).getTime()+Number(b.duration_minutes||45)*60000)));
         if(pClash)patientConflicts.push(a.rowNo);
       }
       if(conflicts.length){msg($('sheetMessage'),`فيه تعارض زمني للدكتور في السطور: ${conflicts.join('، ')}. عدّل الأوقات قبل الحفظ.`);return;}
@@ -784,7 +817,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
   }
   async function cancelAppointment(id){
     if(!confirm('هل تريد إلغاء هذا الموعد؟'))return;
-    const {error}=await sb.from('sanad_calendar_appointments').update({status:'cancelled'}).eq('id',id);
+    const {error}=await sb.rpc('sanad_calendar_change_status',{p_appointment_id:id,p_new_status:'cancelled',p_notes:'إلغاء من شاشة المواعيد'});
     if(error){alert('تعذر إلغاء الموعد: '+error.message);return;}
     await appointmentsPage();
   }
@@ -801,7 +834,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     const defaultDept=existing?.department_id||(depts.some(d=>d.id===state.profile.department_id)?state.profile.department_id:depts[0]?.id);
     const localDate=existing?new Date(new Date(existing.appointment_at).getTime()-new Date(existing.appointment_at).getTimezoneOffset()*60000).toISOString().slice(0,16):'';
     const apptType=existing?.appointment_type||'therapy';
-    setPage(editId?'تعديل الموعد':'إضافة موعد',`<form id="apptForm"><div class="form-grid"><div class="field span-2"><label>المريض *</label><select name="patient_id" required><option value="">اختر المريض</option>${patients.map(p=>`<option value="${esc(p.id)}" ${p.id===existing?.patient_id?'selected':''}>${esc(p.full_name)}</option>`).join('')}</select></div><div class="field"><label>القسم *</label><select name="department_id" required>${depts.map(d=>`<option value="${esc(d.id)}" ${d.id===defaultDept?'selected':''}>${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label>نوع الموعد *</label><select name="appointment_type"><option value="assessment" ${apptType==='assessment'?'selected':''}>كشف / تقييم أولي</option><option value="therapy" ${apptType==='therapy'?'selected':''}>جلسة علاجية</option></select></div><div class="field span-2"><label>الباقة المرتبطة (اختياري)</label><select name="package_id" id="appointmentPackage"><option value="">بدون باقة — جلسة فردية</option></select><small class="muted">عند تأكيد جلسة الباقة يُخصم استهلاك جلسة واحدة فقط، دون تسجيل إيراد مكرر.</small></div><div class="field"><label>التاريخ والوقت *</label><input name="appointment_at" type="datetime-local" value="${esc(localDate)}" required></div><div class="field"><label>المعالج المسؤول *</label><select name="therapist_id" id="appointmentTherapist" required><option value="">اختر المعالج</option>${state.therapists.filter(x=>x.department_ids.includes(defaultDept)).map(x=>`<option value="${esc(x.id)}" ${x.id===existing?.therapist_id?'selected':''}>${esc(x.full_name)}${x.job_title?' — '+esc(x.job_title):''}</option>`).join('')}</select></div><div class="field span-2"><div id="doctorDaySchedule" class="analysis-note">اختر التاريخ والمعالج لعرض مواعيده المحجوزة في هذا اليوم.</div></div><div class="field"><label>المدة بالدقائق *</label><input name="duration" type="number" min="5" max="240" value="${esc(existing?.duration_minutes??'')}" required><small class="muted" id="durationHint">تُحمّل المدة الافتراضية من إعدادات المريض والقسم.</small></div><div class="field"><label>الحالة</label><select name="status" ${existing?.status==='completed'?'disabled':''}>${[['scheduled','مجدول'],['cancelled','ملغي'],['no_show','لم يأخذ الجلسة']].map(([v,l])=>`<option value="${v}" ${(existing?.status||'scheduled')===v?'selected':''}>${l}</option>`).join('')}</select><small class="muted">إتمام الجلسة يتم من زر التأكيد في الكلندر فقط.</small></div><div class="field span-2"><label>ملاحظات</label><textarea name="notes">${esc(existing?.notes||'')}</textarea></div></div><div class="toolbar"><button class="btn" type="button" id="saveAppointmentBtn">${editId?'حفظ التعديلات':'حفظ الموعد'}</button><button class="btn ghost" id="cancelAppt" type="button">رجوع</button></div><div id="apptMessage"></div></form>`);
+    setPage(editId?'تعديل الموعد':'إضافة موعد',`<form id="apptForm"><div class="form-grid"><div class="field span-2"><label>المريض *</label><select name="patient_id" required><option value="">اختر المريض</option>${patients.map(p=>`<option value="${esc(p.id)}" ${p.id===existing?.patient_id?'selected':''}>${esc(p.full_name)}</option>`).join('')}</select></div><div class="field"><label>القسم *</label><select name="department_id" required>${depts.map(d=>`<option value="${esc(d.id)}" ${d.id===defaultDept?'selected':''}>${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label>نوع الموعد *</label><select name="appointment_type"><option value="assessment" ${apptType==='assessment'?'selected':''}>كشف / تقييم أولي</option><option value="therapy" ${apptType==='therapy'?'selected':''}>جلسة علاجية</option></select></div><div class="field span-2"><label>الباقة المرتبطة (اختياري)</label><select name="package_id" id="appointmentPackage"><option value="">بدون باقة — جلسة فردية</option></select><small class="muted">عند تأكيد جلسة الباقة يُخصم استهلاك جلسة واحدة فقط، دون تسجيل إيراد مكرر.</small></div><div class="field"><label>التاريخ والوقت *</label><input name="appointment_at" type="datetime-local" value="${esc(localDate)}" required></div><div class="field"><label>المعالج المسؤول *</label><select name="therapist_id" id="appointmentTherapist" required><option value="">اختر المعالج</option>${state.therapists.filter(x=>x.department_ids.includes(defaultDept)).map(x=>`<option value="${esc(x.id)}" ${x.id===existing?.therapist_id?'selected':''}>${esc(x.full_name)}${x.job_title?' — '+esc(x.job_title):''}</option>`).join('')}</select></div><div class="field span-2"><div id="doctorDaySchedule" class="analysis-note">اختر التاريخ والمعالج لعرض مواعيده المحجوزة في هذا اليوم.</div></div><div class="field"><label>المدة بالدقائق *</label><input name="duration" type="number" min="5" max="240" value="${esc(existing?.duration_minutes??'')}" required><small class="muted" id="durationHint">تُحمّل المدة الافتراضية من إعدادات المريض والقسم.</small></div><div class="field"><label>الحالة</label><select name="status" disabled>${[[existing?.status||'scheduled',statusName(existing?.status||'scheduled')]].map(([v,l])=>`<option value="${v}" selected>${l}</option>`).join('')}</select><small class="muted">تغيير الحالة يتم من أزرار الموعد في الكلندر حتى يُسجل في سجل الحالات.</small></div><div class="field span-2"><label>ملاحظات</label><textarea name="notes">${esc(existing?.notes||'')}</textarea></div></div><div class="toolbar"><button class="btn" type="button" id="saveAppointmentBtn">${editId?'حفظ التعديلات':'حفظ الموعد'}</button><button class="btn ghost" id="cancelAppt" type="button">رجوع</button></div><div id="apptMessage"></div></form>`);
     const refreshPackages=async()=>{
       const patientId=$('apptForm').elements.patient_id.value,departmentId=$('apptForm').elements.department_id.value;
       const select=$('appointmentPackage');const keep=select.value||existing?.package_id||'';
@@ -930,9 +963,9 @@ tr.voided td{opacity:.55;text-decoration:line-through}
           // الجلسة المكتملة سعرها مسجل في الحسابات؛ لا نمسّه من نموذج الموعد أبدًا
           session_price:existing?.status==='completed'?(existing.session_price??null):null
         };
-        if(payload.status!=='cancelled'){
+        if(!['cancelled','no_show'].includes(payload.status)){
           const fmtT=v=>new Date(v).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'});
-          let tq=sb.from('sanad_calendar_appointments').select('id,appointment_at,appointment_end_at,patients(full_name)').eq('therapist_id',payload.therapist_id).neq('status','cancelled').lt('appointment_at',payload.appointment_end_at).gt('appointment_end_at',payload.appointment_at).limit(1);
+          let tq=sb.from('sanad_calendar_appointments').select('id,appointment_at,appointment_end_at,patients(full_name)').eq('therapist_id',payload.therapist_id).not('status','in','(cancelled,no_show)').lt('appointment_at',payload.appointment_end_at).gt('appointment_end_at',payload.appointment_at).limit(1);
           if(editId)tq=tq.neq('id',editId);
           const therapistClash=await tq;
           if(therapistClash.error)throw new Error('تعذر فحص تعارض مواعيد المعالج: '+therapistClash.error.message);
@@ -941,7 +974,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
             msg(message,`المعالج عنده موعد في نفس الوقت (${fmtT(c.appointment_at)} – ${fmtT(c.appointment_end_at)}) للمريض ${c.patients?.full_name||'—'}. اختر وقتًا آخر أو معالجًا آخر.`);
             return;
           }
-          let pq=sb.from('sanad_calendar_appointments').select('id,appointment_at,appointment_end_at').eq('patient_id',payload.patient_id).neq('status','cancelled').lt('appointment_at',payload.appointment_end_at).gt('appointment_end_at',payload.appointment_at).limit(1);
+          let pq=sb.from('sanad_calendar_appointments').select('id,appointment_at,appointment_end_at').eq('patient_id',payload.patient_id).not('status','in','(cancelled,no_show)').lt('appointment_at',payload.appointment_end_at).gt('appointment_end_at',payload.appointment_at).limit(1);
           if(editId)pq=pq.neq('id',editId);
           const patientClash=await pq;
           if(patientClash.error)throw new Error('تعذر فحص تعارض مواعيد المريض: '+patientClash.error.message);
@@ -1016,20 +1049,18 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     await appointmentsPage();
   }
   async function callCompleteAppointment(id,amount,method,price){
-    const base={p_appointment_id:id,p_collected_amount:amount,p_payment_method:method};
-    const missing=r=>r.error&&(r.error.code==='PGRST202'||/could not find the function|schema cache/i.test(r.error.message||''));
-    // الإصدار الحالي من الدالة يستقبل p_session_price. لو قاعدة البيانات ما زالت بالتوقيع القديم نحفظ السعر على الموعد ثم نستدعي الدالة القديمة.
-    let result=await sb.rpc('sanad_calendar_complete_appointment',{...base,p_session_price:price});
-    if(missing(result)){
-      if(price!=null){const up=await sb.from('sanad_calendar_appointments').update({session_price:price}).eq('id',id).neq('status','completed');if(up.error)return {data:null,error:up.error};}
-      result=await sb.rpc('sanad_calendar_complete_appointment',base);
-    }
-    return result;
+    // إتمام الجلسة عملية مالية/علاجية ذرية؛ لا نستخدم توقيعًا قديمًا ولا نحدّث حقول الموعد مباشرة.
+    return await sb.rpc('sanad_calendar_complete_appointment',{
+      p_appointment_id:id,
+      p_collected_amount:amount,
+      p_payment_method:method,
+      p_session_price:price
+    });
   }
   async function markAppointmentNoShow(id){
     if(!isRole('admin','secretary','receptionist'))return;
     if(!confirm('تأكيد أن المريض لم يأخذ الجلسة؟ لن يتم خصم جلسة من الباقة ولن يُسجل أي إيراد.'))return;
-    const {error}=await sb.from('sanad_calendar_appointments').update({status:'no_show'}).eq('id',id).neq('status','completed');
+    const {error}=await sb.rpc('sanad_calendar_change_status',{p_appointment_id:id,p_new_status:'no_show',p_notes:'تسجيل عدم حضور المريض'});
     if(error){alert('تعذر تحديث حالة الموعد: '+error.message);return;}
     await appointmentsPage();
   }
@@ -1057,6 +1088,49 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       if(result.error){msg($('completeSessionMessage'),'تعذر إتمام الجلسة: '+result.error.message);return;}
       msg($('completeSessionMessage'),isPackage?'تم تأكيد الجلسة وخصم جلسة واحدة من الباقة دون تكرار الإيراد.':'تم تأكيد الجلسة وتسجيل المبلغ المحصل في الإيرادات.','success');
       setTimeout(appointmentsPage,800);
+    });
+  }
+  async function reverseCompletedSession(id){
+    if(!isRole('admin','secretary'))return;
+    const {data:appt,error}=await sb.from('sanad_calendar_appointments')
+      .select('id,patient_id,status,appointment_type,package_id,collected_amount,patients(full_name)')
+      .eq('id',id).maybeSingle();
+    if(error||!appt){alert('تعذر تحميل بيانات الجلسة: '+(error?.message||'غير موجود'));return;}
+    if(appt.status!=='completed'||appt.appointment_type!=='therapy'){alert('هذا الإجراء متاح للجلسات العلاجية المكتملة فقط.');return;}
+    const isPackage=!!appt.package_id;
+    let amount=Number(appt.collected_amount||0);
+    if(!isPackage){
+      const {data:charge,error:chargeError}=await sb.from('patient_account_charges')
+        .select('id').eq('calendar_appointment_id',id).is('voided_at',null).maybeSingle();
+      if(chargeError){alert('تعذر التحقق من إجمالي ما تم تحصيله على الجلسة: '+chargeError.message);return;}
+      if(charge){
+        const {data:allocations,error:allocationError}=await sb.from('patient_account_payment_allocations')
+          .select('amount').eq('charge_id',charge.id).is('voided_at',null);
+        if(allocationError){alert('تعذر تحميل توزيعات التحصيل الخاصة بالجلسة: '+allocationError.message);return;}
+        amount=(allocations||[]).reduce((sum,row)=>sum+Number(row.amount||0),0);
+      }else if(amount>0){
+        alert('يوجد مبلغ مسجل على الموعد لكن لا يوجد قيد مديونية مرتبط به. أوقفنا التصحيح لحماية الحساب.');return;
+      }else amount=0;
+    }
+    const refundFields=!isPackage&&amount>0?'<div class="notice warning">المبلغ الذي يجب رده فعليًا: <strong>'+money(amount)+'</strong>. لن يسمح النظام بالتراجع قبل تسجيل طريقة الرد وإثباته.</div><div class="field"><label>طريقة رد المبلغ</label><select name="refund_method" required><option value="cash">نقدي</option><option value="card">رد إلى البطاقة</option><option value="transfer">تحويل بنكي/محفظة</option><option value="other">أخرى</option></select></div><div class="field"><label>الرقم المرجعي للإيصال أو التحويل (إن وجد)</label><input name="refund_reference" maxlength="160" placeholder="رقم الإيصال / مرجع التحويل"></div><div class="field"><label>وصف إثبات الرد وتفاصيله</label><textarea name="refund_proof" minlength="5" required placeholder="مثال: تم رد المبلغ نقدًا للمريض واستلم المبلغ بالكامل بحضور..."></textarea></div>':'';
+    const packageNote=isPackage?'<div class="notice">الجلسة على باقة: سيتم إعادة الجلسة إلى رصيد الباقة، ولا يوجد رد نقدي مرتبط بإتمام هذه الجلسة.</div>':amount===0?'<div class="notice">لا يوجد مبلغ محصل مرتبط بهذه الجلسة؛ لن يُطلب إثبات رد مالي.</div>':'';
+    const html='<form id="reverseSessionForm"><p>المريض: <strong>'+esc(appt.patients?.full_name||'—')+'</strong></p>'+packageNote+refundFields+'<div class="field"><label>سبب تصحيح الجلسة</label><textarea name="reason" minlength="3" required placeholder="اكتب سبب التراجع بوضوح"></textarea></div><div class="notice error">هذا الإجراء سيعكس تسجيل الجلسة وسجلها المالي/العلاجي، ويحتفظ بسجل التدقيق. لا تستخدمه إذا كانت الجلسة قد تمت بالفعل بشكل صحيح.</div><div class="toolbar"><button class="btn danger" type="submit">تأكيد التصحيح'+(amount>0&&!isPackage?' بعد إثبات رد المبلغ':'')+'</button><button class="btn ghost" id="cancelReverseSession" type="button">رجوع</button></div><div id="reverseSessionMessage"></div></form>';
+    setPage('تصحيح جلسة مكتملة',html);
+    $('cancelReverseSession').addEventListener('click',appointmentsPage);
+    $('reverseSessionForm').addEventListener('submit',async e=>{
+      e.preventDefault();const form=new FormData(e.currentTarget);
+      const reason=String(form.get('reason')||'').trim();
+      const refundMethod=isPackage||amount===0?null:String(form.get('refund_method')||'');
+      const refundReference=isPackage||amount===0?null:String(form.get('refund_reference')||'').trim()||null;
+      const refundProof=isPackage||amount===0?null:String(form.get('refund_proof')||'').trim()||null;
+      if(reason.length<3){msg($('reverseSessionMessage'),'اكتب سببًا واضحًا للتصحيح.');return;}
+      if(amount>0&&!isPackage&&(!refundMethod||(!refundReference&&(!refundProof||refundProof.length<5)))){msg($('reverseSessionMessage'),'أدخل طريقة الرد وإثباته أو الرقم المرجعي.');return;}
+      const btn=e.currentTarget.querySelector('button[type=submit]');btn.disabled=true;
+      const result=await sb.rpc('sanad_reverse_completed_session',{p_appointment_id:id,p_reason:reason,p_refund_method:refundMethod,p_refund_reference:refundReference,p_refund_proof:refundProof});
+      btn.disabled=false;
+      if(result.error){msg($('reverseSessionMessage'),'تعذر تصحيح الجلسة: '+result.error.message);return;}
+      msg($('reverseSessionMessage'),'تم تصحيح الجلسة وتسجيل إثبات رد المبلغ عند وجود تحصيل.','success');
+      setTimeout(appointmentsPage,900);
     });
   }
   async function therapistWorkPage(){
@@ -1093,13 +1167,22 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     const {data,error}=await sb.from('sanad_package_summary').select('*').order('purchased_at',{ascending:false}).limit(500);
     if(error){$('sectionBody').innerHTML=`<div class="notice error">تعذر تحميل الباقات: ${esc(error.message)}</div><p class="muted small">تأكد من صلاحيات قراءة الباقات وView الملخص.</p>`;return;}
     const rows=data||[];
-    $('sectionBody').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>المريض</th><th>القسم</th><th>اسم الباقة</th><th>رسوم الكشف</th><th>سعر الجلسة</th><th>الجلسات</th><th>قيمة الباقة</th><th>الحالة</th><th>المدفوع</th><th>المتبقي</th><th>المتبقي جلسات</th><th>حالة الكشف</th><th>الإجراءات</th></tr></thead><tbody>${rows.map(p=>`<tr><td>${esc(p.patient_name)}</td><td>${esc(p.department_name)}</td><td>${esc(p.package_name)}</td><td>${money(p.assessment_fee)}</td><td>${money(p.session_price)}</td><td>${esc(p.total_sessions)}</td><td><strong>${money(p.package_total)}</strong></td><td>${({active:'نشطة',completed:'مكتملة',expired:'منتهية',cancelled:'ملغاة'})[p.status]||esc(p.status)}</td><td>${money(p.total_paid)}</td><td>${money(p.remaining_amount)}</td><td>${esc(p.remaining_sessions)} / ${esc(p.total_sessions)}</td><td>${p.assessment_completed_at?'<span class="badge">تم الكشف</span>':'<span class="badge pending">لم يتم</span>'}</td><td><div class="toolbar"><button class="btn secondary" data-package-payment="${esc(p.package_id)}" type="button">تسجيل دفعة</button><button class="btn ghost" data-edit-package="${esc(p.package_id)}" type="button">تعديل الباقة</button><button class="btn ghost" data-package-history="${esc(p.package_id)}" type="button">سجل الدفعات</button>${isAdmin()?`<button class="btn danger" data-delete="package" data-id="${esc(p.package_id)}" type="button">حذف</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد باقات مسجلة حتى الآن. ابدأ بإنشاء أول باقة.</div>';
+    let activeApprovals=[];
+    if(isRole('admin','secretary')&&rows.length){
+      const approvalResult=await sb.from('sanad_package_usage_approvals').select('id,package_id,reason,approved_at,paid_amount_at_approval,remaining_amount_at_approval').is('revoked_at',null).in('package_id',rows.map(p=>p.package_id));
+      if(approvalResult.error){$('sectionBody').innerHTML=`<div class="notice error">تعذر تحميل موافقات استخدام الباقات: ${esc(approvalResult.error.message)}</div>`;return;}
+      activeApprovals=approvalResult.data||[];
+    }
+    const approvalByPackage=new Map(activeApprovals.map(a=>[a.package_id,a]));
+    $('sectionBody').innerHTML=rows.length?`<div class="notice">إذا لم تكن الباقة مسددة بالكامل، لا يجوز استخدامها إلا بعد موافقة المدير الإداري لهذه الباقة تحديدًا، مع تسجيل سبب الموافقة. الموافقة لا تتجاوز قيمة الباقة أو عدد جلساتها، وتُلغى تلقائيًا عند تغير السعر أو عدد الجلسات.</div><div class="table-wrap"><table><thead><tr><th>المريض</th><th>القسم</th><th>اسم الباقة</th><th>رسوم الكشف</th><th>سعر الجلسة</th><th>الجلسات</th><th>قيمة الباقة</th><th>الحالة</th><th>المدفوع</th><th>المتبقي</th><th>المتبقي جلسات</th><th>حالة الكشف</th><th>اعتماد الاستخدام</th><th>الإجراءات</th></tr></thead><tbody>${rows.map(p=>{const approval=approvalByPackage.get(p.package_id);const needsApproval=p.status==='active'&&Number(p.remaining_amount||0)>0;return `<tr><td>${esc(p.patient_name)}</td><td>${esc(p.department_name)}</td><td>${esc(p.package_name)}</td><td>${money(p.assessment_fee)}</td><td>${money(p.session_price)}</td><td>${esc(p.total_sessions)}</td><td><strong>${money(p.package_total)}</strong></td><td>${({active:'نشطة',completed:'مكتملة',expired:'منتهية',cancelled:'ملغاة'})[p.status]||esc(p.status)}</td><td>${money(p.total_paid)}</td><td>${money(p.remaining_amount)}</td><td>${esc(p.remaining_sessions)} / ${esc(p.total_sessions)}</td><td>${p.assessment_completed_at?'<span class="badge">تم الكشف</span>':'<span class="badge pending">لم يتم</span>'}</td><td>${!needsApproval?'—':approval?`<span class="badge">موافق عليها</span><div class="small muted">${esc(approval.reason)}</div><button class="btn danger" data-revoke-package-approval="${esc(approval.id)}" type="button">إلغاء الموافقة</button>`:'<span class="badge pending">تحتاج موافقة المدير</span>'+(isAdmin()?`<button class="btn secondary" data-approve-package="${esc(p.package_id)}" type="button">اعتماد الاستخدام</button>`:'')}</td><td><div class="toolbar"><button class="btn secondary" data-package-payment="${esc(p.package_id)}" type="button">تسجيل دفعة</button><button class="btn ghost" data-edit-package="${esc(p.package_id)}" type="button">تعديل الباقة</button><button class="btn ghost" data-package-history="${esc(p.package_id)}" type="button">سجل الدفعات</button>${isAdmin()?`<button class="btn danger" data-delete="package" data-id="${esc(p.package_id)}" type="button">حذف</button>`:''}</div></td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty">لا توجد باقات مسجلة حتى الآن. ابدأ بإنشاء أول باقة.</div>';
     attachTableSearch('sectionBody','ابحث عن المريض أو اسم الباقة أو القسم…');
     $('sectionActions').innerHTML='<button class="btn" id="addPackageBtn" type="button">+ إنشاء باقة جديدة</button>';
     $('addPackageBtn')?.addEventListener('click',packageForm);
     $('sectionBody').querySelectorAll('[data-package-payment]').forEach(b=>b.addEventListener('click',()=>packagePaymentForm(b.dataset.packagePayment)));
     $('sectionBody').querySelectorAll('[data-package-history]').forEach(b=>b.addEventListener('click',()=>packagePaymentHistory(b.dataset.packageHistory)));
     $('sectionBody').querySelectorAll('[data-edit-package]').forEach(b=>b.addEventListener('click',()=>editPackageForm(b.dataset.editPackage)));
+    $('sectionBody').querySelectorAll('[data-approve-package]').forEach(b=>b.addEventListener('click',async()=>{const reason=prompt('اكتب سبب موافقة المدير على استخدام هذه الباقة قبل سدادها بالكامل:');if(reason===null)return;if(reason.trim().length<3){alert('يجب كتابة سبب واضح لا يقل عن 3 أحرف.');return;}b.disabled=true;const result=await sb.rpc('sanad_approve_package_usage_before_full_payment',{p_package_id:b.dataset.approvePackage,p_reason:reason.trim()});if(result.error){b.disabled=false;alert('تعذر اعتماد الباقة: '+result.error.message);return;}alert('تم تسجيل موافقة المدير لهذه الباقة.');await packagesPage();}));
+    $('sectionBody').querySelectorAll('[data-revoke-package-approval]').forEach(b=>b.addEventListener('click',async()=>{const reason=prompt('اكتب سبب إلغاء موافقة استخدام الباقة:');if(reason===null)return;if(reason.trim().length<3){alert('يجب كتابة سبب واضح لا يقل عن 3 أحرف.');return;}b.disabled=true;const result=await sb.rpc('sanad_revoke_package_usage_approval',{p_approval_id:b.dataset.revokePackageApproval,p_reason:reason.trim()});if(result.error){b.disabled=false;alert('تعذر إلغاء الموافقة: '+result.error.message);return;}alert('تم إلغاء الموافقة.');await packagesPage();}));
   }
   async function packageForm(){
     if(!isRole('admin','secretary'))return;
@@ -1388,7 +1471,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
 
   async function backupPage(){
     if(!isAdmin()){setPage('النسخ الاحتياطي','<div class="notice error">النسخ الاحتياطي متاح للمدير الإداري فقط.</div>');return;}
-    const tables=['departments','patients','patient_departments','patient_department_settings','patient_medical_records','appointments','sanad_calendar_appointments','sanad_calendar_status_history','therapy_sessions','patient_packages','package_payments','package_session_usage','financial_entries','financial_closings','treasury_accounts','staff_profiles','staff_department_access','sanad_audit_logs'];
+    const tables=['departments','patients','patient_departments','patient_department_settings','patient_medical_records','appointments','sanad_calendar_appointments','sanad_calendar_status_history','sanad_monthly_schedule_reviews','sanad_package_usage_approvals','therapy_sessions','patient_packages','package_payments','package_session_usage','patient_account_charges','patient_account_receipts','patient_account_payment_allocations','financial_entries','financial_closings','treasury_accounts','sanad_employees','sanad_employee_departments','staff_profiles','staff_department_access','sanad_audit_logs'];
     setPage('النسخ الاحتياطي',`<p>يمكنك تنزيل نسخة بيانات تشغيلية من جداول مركز سند في ملف JSON واحد، تشمل بيانات المرضى والأقسام والسجلات الطبية والمواعيد والجلسات والباقات والمالية والموظفين وسجل العمليات.</p><div class="notice">الملف يحتوي بيانات شخصية وطبية ومالية حساسة. احفظه في مكان مشفر ومحدود الوصول، ولا ترسله عبر واتساب أو بريد غير آمن. النسخة لا تشمل حسابات الدخول في Supabase Auth أو إعدادات المشروع ومفاتيحه.</div><div class="analysis-note"><strong>الاستعادة:</strong> لا تستعد الملف من داخل الموقع مباشرة. عند الحاجة للاستعادة، استخدم نسخة قاعدة البيانات من لوحة Supabase أو اطلب تنفيذ استعادة منظمة عبر SQL بعد التأكد من العلاقات والمعرفات. لا ترفع ملف النسخة إلى مستودع GitHub العام.</div><div class="toolbar"><button class="btn" id="runBackup" type="button">تنزيل نسخة بيانات JSON</button><span class="muted small">سيتم قراءة الجداول الـ ${tables.length} مع تقسيم القراءة إلى دفعات حتى لا تُسقط السجلات الزائدة عن حد العرض.</span></div><div id="backupMessage" aria-live="polite"></div><div id="backupProgress" class="muted small" style="margin-top:10px"></div>`);
     $('runBackup')?.addEventListener('click',async()=>{
       const btn=$('runBackup'),message=$('backupMessage'),progress=$('backupProgress');btn.disabled=true;msg(message,'');progress.textContent='جارٍ تجهيز النسخة…';
