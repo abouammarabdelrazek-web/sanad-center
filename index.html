@@ -265,7 +265,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     $('loginView').classList.add('hidden'); $('appView').classList.remove('hidden'); $('logoutBtn').classList.remove('hidden'); $('rolePill').classList.remove('hidden');
     $('rolePill').textContent=roleNames[state.profile.role]||state.profile.role;
     $('welcomeTitle').textContent='أهلًا، '+(state.profile.full_name||'فريق مركز سند');
-    $('welcomeSub').textContent=isAdmin()?'لديك صلاحية إدارة المركز بالكامل.':'يمكنك الوصول إلى الوظائف المسموح بها حسب صلاحيتك.';
+    $('welcomeSub').textContent=state.profile.role==='secretary'||state.profile.role==='receptionist'?'مساحة عمل السكرتارية — المهام اليومية فقط.':state.profile.role==='technical_manager'?'مساحة عمل المدير الفني — الأقسام المسندة فقط.':state.profile.role==='therapist'?'مساحة عمل المعالج — القسم أو الأقسام المسندة فقط.':state.profile.role==='accountant'?'مساحة عمل المحاسب — الوظائف المالية فقط.': 'لديك صلاحية إدارة المركز بالكامل.';
     renderNav(); await showPage('overview');
   }
   function renderNav(){
@@ -334,12 +334,33 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     fetchStats().catch(err => console.error('Stats loading failed:', err));
   }
   function overviewPage(){
-    const depts=allowedDepartments();
-    const canBrowseDepartments=isRole('admin','secretary','receptionist','technical_manager');
-    const deptHtml=canBrowseDepartments?`<div class="dept-grid">${depts.map(d=>`<button class="dept dept-open" data-department="${esc(d.id)}" type="button" style="text-align:right;cursor:pointer;color:inherit"><h4>${esc(d.name)}</h4><p>اضغط لعرض مرضى القسم وجدوله</p></button>`).join('')}</div>`:'';
-    const intro=isRole('accountant')?'يمكنك الوصول إلى التقارير المالية فقط. لا تظهر لك ملفات المرضى أو الجداول الطبية.':'مرحبًا بك في نظام إدارة مركز سند. اختر الوظيفة المطلوبة من القائمة.';
-    setPage('نظرة عامة',`<p class="muted" style="margin-top:0">${intro}</p>${deptHtml}<div class="notice success" style="margin-top:16px">تم التحقق من تسجيل الدخول وقراءة صلاحيات الموظف.</div>`);
+    const role=state.profile?.role;
+    const shortcut=(id,title,description)=>`<button class="dept" data-shortcut="${id}" type="button" style="text-align:right;cursor:pointer;color:inherit"><h4>${title}</h4><p>${description}</p></button>`;
+    if(['secretary','receptionist'].includes(role)){
+      const shortcuts=[
+        shortcut('patients','ملفات المرضى','إضافة مريض أو البحث عن ملف مريض موجود'),
+        shortcut('appointments','المواعيد والجلسات','حجز المواعيد وتأكيد الجلسات وتحديث حالتها'),
+        shortcut('bulkSchedule','توزيع جدول دكتور','تنظيم مواعيد الأطباء'),
+        shortcut('followup','متابعة المرضى','متابعة المواعيد القادمة والمتأخرة'),
+        shortcut('packages','الباقات والتحصيل','إدارة الباقات وتسجيل التحصيلات'),
+        shortcut('dailyFinance','حركة مالية اليوم','تسجيل ومراجعة إيرادات ومصروفات اليوم'),
+        shortcut('departments','الأقسام','عرض جداول الأقسام ومرضى كل قسم')
+      ].join('');
+      setPage('الرئيسية — السكرتارية',`<p class="muted" style="margin-top:0">أهلًا ${esc(state.profile.full_name||'بك')}. دي مساحة عمل السكرتارية، وتشمل المهام اليومية المسموح بها لحسابك فقط.</p><div class="dept-grid">${shortcuts}</div>`);
+    }else if(['technical_manager','therapist'].includes(role)){
+      const depts=allowedDepartments();
+      const deptHtml=depts.map(d=>`<button class="dept dept-open" data-department="${esc(d.id)}" type="button" style="text-align:right;cursor:pointer;color:inherit"><h4>${esc(d.name)}</h4><p>عرض مرضى القسم وجدوله</p></button>`).join('');
+      const extra=role==='technical_manager'?shortcut('followup','متابعة المرضى','متابعة مرضى ومواعيد الأقسام المسندة إليك'):'';
+      setPage(role==='technical_manager'?'مساحة عمل المدير الفني':'مساحة عمل المعالج',`<p class="muted" style="margin-top:0">أهلًا ${esc(state.profile.full_name||'بك')}. تظهر هنا الأقسام المسندة لحسابك فقط.</p><div class="dept-grid">${deptHtml}${extra}</div>`);
+    }else if(role==='accountant'){
+      setPage('مساحة عمل المحاسب',`<p class="muted">يمكنك الوصول إلى التقارير والحركات المالية وفق صلاحيات حسابك. لا تظهر هنا ملفات المرضى أو الجداول الطبية.</p><div class="dept-grid">${shortcut('finances','الإيرادات والمصروفات','التقارير والتحليلات المالية')}</div>`);
+    }else{
+      const depts=allowedDepartments();
+      const deptHtml=`<div class="dept-grid">${depts.map(d=>`<button class="dept dept-open" data-department="${esc(d.id)}" type="button" style="text-align:right;cursor:pointer;color:inherit"><h4>${esc(d.name)}</h4><p>اضغط لعرض مرضى القسم وجدوله</p></button>`).join('')}</div>`;
+      setPage('نظرة عامة',`<p class="muted" style="margin-top:0">مرحبًا بك في نظام إدارة مركز سند. لديك صلاحية إدارة المركز بالكامل.</p>${deptHtml}<div class="notice success" style="margin-top:16px">تم التحقق من تسجيل الدخول وقراءة صلاحيات الموظف.</div>`);
+    }
     $('sectionBody').querySelectorAll('[data-department]').forEach(b=>b.addEventListener('click',()=>{state.selectedDepartment=b.dataset.department;showPage('departments');}));
+    $('sectionBody').querySelectorAll('[data-shortcut]').forEach(b=>b.addEventListener('click',()=>showPage(b.dataset.shortcut)));
   }
   async function departmentsPage(){
     if(!isRole('admin','secretary','receptionist','technical_manager','therapist')){setPage('الأقسام','<div class="notice error">غير مصرح لك بعرض ملفات الأقسام.</div>');return;}
