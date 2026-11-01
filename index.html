@@ -773,11 +773,11 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     const [pRes,linkRes,employeePhoneRes]=await Promise.all([
       sb.from('patients').select('id,full_name,department_id').eq('is_active',true).order('full_name').limit(1500),
       sb.from('patient_departments').select('patient_id,department_id'),
-      sb.from('sanad_employees').select('id,phone').eq('is_active',true)
+      sb.rpc('sanad_list_schedule_therapists_with_phone')
     ]);
     if(pRes.error||linkRes.error||employeePhoneRes.error){setPage('توزيع جدول الدكتور',`<div class="notice error">تعذر تجهيز الشيت: ${esc(pRes.error?.message||linkRes.error?.message||employeePhoneRes.error?.message)}</div>`);return;}
     const patients=pRes.data||[],links=linkRes.data||[];
-    const employeePhones=new Map((employeePhoneRes.data||[]).map(x=>[x.id,x.phone||'']));
+    const employeePhones=new Map((employeePhoneRes.data||[]).map(x=>[x.employee_id,x.phone||'']));
     const doctors=state.therapists.map(x=>({...x,phone:employeePhones.get(x.id)||''}));
     let existing=[];
     async function loadExistingForDay(day){const [y,m]=day.split('-').map(Number);const a=cairoDayBounds(`${y}-${String(m).padStart(2,'0')}-01`).start;const next=new Date(y,m,1);const b=cairoDayBounds(`${next.getFullYear()}-${String(next.getMonth()+1).padStart(2,'0')}-01`).start;const r=await sb.from('sanad_calendar_appointments').select('id,patient_id,department_id,therapist_id,appointment_at,duration_minutes,status,appointment_type,patients(full_name)').gte('appointment_at',a).lt('appointment_at',b).neq('status','cancelled').limit(3000);if(r.error)throw r.error;existing=r.data||[];}
