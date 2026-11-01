@@ -544,7 +544,11 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     const completed=appts.filter(a=>a.status==='completed').length;
     const upcoming=appts.filter(a=>!['cancelled','completed','no_show'].includes(a.status)&&new Date(a.appointment_at).getTime()>=Date.now()).length;
     const sessionCollections=appts.filter(a=>a.status==='completed'&&Number(a.collected_amount||0)>0);
-    const paidPackages=pays.filter(x=>!x.voided_at).reduce((n,x)=>n+Number(x.amount||0),0),paidSessions=sessionCollections.reduce((n,x)=>n+Number(x.collected_amount||0),0);
+    const paidPackages=pays.filter(x=>!x.voided_at).reduce((n,x)=>n+Number(x.amount||0),0);
+    const ledgerAppointmentIdsForTotals=new Set((accountChargesRes.data||[]).map(x=>x.calendar_appointment_id).filter(Boolean));
+    const activeLedgerReceipts=(accountAllocationsRes.data||[]).filter(x=>!x.voided_at).reduce((n,x)=>n+Number(x.amount||0),0);
+    const legacyPaidSessions=sessionCollections.filter(a=>!ledgerAppointmentIdsForTotals.has(a.id)).reduce((n,x)=>n+Number(x.collected_amount||0),0);
+    const paidSessions=activeLedgerReceipts+legacyPaidSessions;
     const pkgName=id=>pkgs.find(x=>x.package_id===id)?.package_name||'باقة';
     const errs=[aRes,kRes,payRes,medicalRes,sessionsRes,accountChargesRes,accountReceiptsRes,accountAllocationsRes].filter(x=>x.error).map(x=>x.error.message);
     const info=(l,v)=>`<div class="info-item"><small>${l}</small><div>${v}</div></div>`;
@@ -698,7 +702,8 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     $('sectionActions').innerHTML=editable?addBtn:'';
     $('addApptBtn')?.addEventListener('click',()=>appointmentForm());
     const cancelledCount=rows.filter(a=>a.status==='cancelled').length;
-    $('scheduleSummary').textContent=`${label} — ${rows.length-cancelledCount} موعد${cancelledCount?` · ${cancelledCount} ملغي`:''}`;
+    const noShowCount=rows.filter(a=>a.status==='no_show').length;
+    $('scheduleSummary').textContent=`${label} — ${rows.length-cancelledCount-noShowCount} موعد${cancelledCount?` · ${cancelledCount} ملغي`:''}${noShowCount?` · ${noShowCount} لم يحضر`:''}`;
     list.innerHTML=rows.length?rows.map(a=>{
       const start=new Date(a.appointment_at);
       const end=a.appointment_end_at?new Date(a.appointment_end_at):new Date(start.getTime()+Number(a.duration_minutes||45)*60000);
