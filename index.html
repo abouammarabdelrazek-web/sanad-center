@@ -1084,7 +1084,21 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       .eq('id',id).maybeSingle();
     if(error||!appt){alert('تعذر تحميل بيانات الجلسة: '+(error?.message||'غير موجود'));return;}
     if(appt.status!=='completed'||appt.appointment_type!=='therapy'){alert('هذا الإجراء متاح للجلسات العلاجية المكتملة فقط.');return;}
-    const amount=Number(appt.collected_amount||0),isPackage=!!appt.package_id;
+    const isPackage=!!appt.package_id;
+    let amount=Number(appt.collected_amount||0);
+    if(!isPackage){
+      const {data:charge,error:chargeError}=await sb.from('patient_account_charges')
+        .select('id').eq('calendar_appointment_id',id).is('voided_at',null).maybeSingle();
+      if(chargeError){alert('تعذر التحقق من إجمالي ما تم تحصيله على الجلسة: '+chargeError.message);return;}
+      if(charge){
+        const {data:allocations,error:allocationError}=await sb.from('patient_account_payment_allocations')
+          .select('amount').eq('charge_id',charge.id).is('voided_at',null);
+        if(allocationError){alert('تعذر تحميل توزيعات التحصيل الخاصة بالجلسة: '+allocationError.message);return;}
+        amount=(allocations||[]).reduce((sum,row)=>sum+Number(row.amount||0),0);
+      }else if(amount>0){
+        alert('يوجد مبلغ مسجل على الموعد لكن لا يوجد قيد مديونية مرتبط به. أوقفنا التصحيح لحماية الحساب.');return;
+      }else amount=0;
+    }
     const refundFields=!isPackage&&amount>0?'<div class="notice warning">المبلغ الذي يجب رده فعليًا: <strong>'+money(amount)+'</strong>. لن يسمح النظام بالتراجع قبل تسجيل طريقة الرد وإثباته.</div><div class="field"><label>طريقة رد المبلغ</label><select name="refund_method" required><option value="cash">نقدي</option><option value="card">رد إلى البطاقة</option><option value="transfer">تحويل بنكي/محفظة</option><option value="other">أخرى</option></select></div><div class="field"><label>الرقم المرجعي للإيصال أو التحويل (إن وجد)</label><input name="refund_reference" maxlength="160" placeholder="رقم الإيصال / مرجع التحويل"></div><div class="field"><label>وصف إثبات الرد وتفاصيله</label><textarea name="refund_proof" minlength="5" required placeholder="مثال: تم رد المبلغ نقدًا للمريض واستلم المبلغ بالكامل بحضور..."></textarea></div>':'';
     const packageNote=isPackage?'<div class="notice">الجلسة على باقة: سيتم إعادة الجلسة إلى رصيد الباقة، ولا يوجد رد نقدي مرتبط بإتمام هذه الجلسة.</div>':amount===0?'<div class="notice">لا يوجد مبلغ محصل مرتبط بهذه الجلسة؛ لن يُطلب إثبات رد مالي.</div>':'';
     const html='<form id="reverseSessionForm"><p>المريض: <strong>'+esc(appt.patients?.full_name||'—')+'</strong></p>'+packageNote+refundFields+'<div class="field"><label>سبب تصحيح الجلسة</label><textarea name="reason" minlength="3" required placeholder="اكتب سبب التراجع بوضوح"></textarea></div><div class="notice error">هذا الإجراء سيعكس تسجيل الجلسة وسجلها المالي/العلاجي، ويحتفظ بسجل التدقيق. لا تستخدمه إذا كانت الجلسة قد تمت بالفعل بشكل صحيح.</div><div class="toolbar"><button class="btn danger" type="submit">تأكيد التصحيح'+(amount>0&&!isPackage?' بعد إثبات رد المبلغ':'')+'</button><button class="btn ghost" id="cancelReverseSession" type="button">رجوع</button></div><div id="reverseSessionMessage"></div></form>';
