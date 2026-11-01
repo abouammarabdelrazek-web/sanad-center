@@ -520,7 +520,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     if(state.profile.role==='technical_manager')aq=aq.in('department_id',state.managerDepartments);
     const none={data:[],error:null};
     const clinicalEnabled=state.profile.role==='technical_manager';
-    const [pRes,lRes,aRes,kRes,payRes,medicalRes,sessionsRes,accountChargesRes,accountReceiptsRes]=await Promise.all([
+    const [pRes,lRes,aRes,kRes,payRes,medicalRes,sessionsRes,accountChargesRes,accountReceiptsRes,refundsRes]=await Promise.all([
       sb.from('patients').select('id,file_number,full_name,phone,sex,department_id,date_of_birth,guardian_name,address,notes,is_active,created_at').eq('id',patientId).maybeSingle(),
       sb.from('patient_departments').select('department_id').eq('patient_id',patientId),
       aq,
@@ -530,7 +530,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       clinicalEnabled?sb.from('therapy_sessions').select('id,department_id,session_date,duration_minutes,treatment_provided,patient_response,home_program,therapist_id,calendar_appointment_id,voided_at,void_reason').eq('patient_id',patientId).in('department_id',state.managerDepartments).order('session_date',{ascending:false}).limit(300):Promise.resolve(none),
       showMoney?sb.from('sanad_patient_account_statement').select('charge_id,patient_id,department_id,department_name,calendar_appointment_id,therapy_session_id,charge_amount,paid_amount,remaining_amount,charge_date,session_date,therapist_id,therapist_name,voided_at').eq('patient_id',patientId).order('charge_date',{ascending:true}):Promise.resolve(none),
       showMoney?sb.from('patient_account_receipts').select('id,patient_id,calendar_appointment_id,amount,payment_method,payment_date,notes,created_at').eq('patient_id',patientId).order('payment_date',{ascending:true}):Promise.resolve(none),
-      Promise.resolve(none)
+      showMoney?sb.from('patient_session_refunds').select('id,appointment_id,amount,refund_method,refund_reference,proof_notes,refunded_at,created_by').eq('patient_id',patientId).order('refunded_at',{ascending:false}):Promise.resolve(none)
     ]);
     const accountAllocationsRes=showMoney&&(accountReceiptsRes.data||[]).length
       ?await sb.from('patient_account_payment_allocations').select('id,receipt_id,charge_id,amount,voided_at,void_reason').in('receipt_id',accountReceiptsRes.data.map(x=>x.id)).order('created_at',{ascending:true})
@@ -595,7 +595,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       appts.filter(a=>a.status==='completed'&&!a.package_id&&a.appointment_type!=='assessment'&&!ledgerAppointmentIds.has(a.id)).forEach(a=>{const eid=entryByAppt[a.id];stmtRows.push({date:a.appointment_at,label:'جلسة فردية — '+deptName(a.department_id)+' (سجل قديم)',type:'session',charge:Number(a.session_price||0),paid:Number(a.collected_amount||0),voided:eid?reversedEntries.has(eid):false});});
       stmtInfo={remainingSessions:pkgs.filter(k=>k.status==='active').reduce((n,k)=>n+Number(k.remaining_sessions||0),0)};
       const statementHtml=`<h4 style="margin-top:22px">كشف حساب المريض</h4><div id="stmtSummary"></div><div class="chart-filters"><div class="field"><label>من تاريخ</label><input type="date" id="stmtFrom"></div><div class="field"><label>إلى تاريخ</label><input type="date" id="stmtTo"></div><div class="field"><label>النوع</label><select id="stmtType"><option value="all">الكل</option><option value="package">الباقات</option><option value="payment">دفعات الباقات والتحصيلات</option><option value="session">الجلسات الفردية</option></select></div><button class="btn secondary" id="stmtPrint" type="button">طباعة / حفظ PDF</button></div><div id="stmtBody"></div>`;
-      money_html=`<h4 style="margin-top:22px">الباقات</h4>${pkgTable}<h4 style="margin-top:22px">المعاملات المالية (${moves.length})</h4>${moveTable}${statementHtml}`;
+      const refundRows=refundsRes.data||[];const refundHtml=`<h4 style="margin-top:22px">إثباتات رد مبالغ الجلسات (${refundRows.length})</h4>${refundRows.length?`<div class="table-wrap"><table><thead><tr><th>تاريخ الرد</th><th>المبلغ</th><th>الطريقة</th><th>الرقم المرجعي</th><th>الإثبات المسجل</th><th>سجل بواسطة</th></tr></thead><tbody>${refundRows.map(x=>`<tr><td>${fmt(x.refunded_at)}</td><td>${money(x.amount)}</td><td>${esc(({cash:'نقدي',card:'بطاقة',transfer:'تحويل',other:'أخرى'})[x.refund_method]||x.refund_method)}</td><td>${esc(x.refund_reference||'—')}</td><td>${esc(x.proof_notes||'—')}</td><td>${esc(x.created_by||'—')}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد مبالغ مردودة مسجلة لهذا المريض.</div>'}`;money_html=`<h4 style="margin-top:22px">الباقات</h4>${pkgTable}<h4 style="margin-top:22px">المعاملات المالية (${moves.length})</h4>${moveTable}${refundHtml}${statementHtml}`;
     }
     let clinicalHtml='';
     const clinicalFields=[['diagnosis','التشخيص'],['chief_complaint','الشكوى الرئيسية'],['medical_history','التاريخ المرضي'],['previous_surgeries','العمليات السابقة'],['medications','الأدوية الحالية'],['allergies','الحساسية'],['initial_assessment','التقييم الأولي'],['treatment_goals','الأهداف العلاجية'],['treatment_plan','الخطة العلاجية'],['clinical_notes','ملاحظات سريرية']];
