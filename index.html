@@ -520,7 +520,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     if(state.profile.role==='technical_manager')aq=aq.in('department_id',state.managerDepartments);
     const none={data:[],error:null};
     const clinicalEnabled=state.profile.role==='technical_manager';
-    const [pRes,lRes,aRes,kRes,payRes,medicalRes,sessionsRes,accountChargesRes,accountReceiptsRes,accountAllocationsRes]=await Promise.all([
+    const [pRes,lRes,aRes,kRes,payRes,medicalRes,sessionsRes,accountChargesRes,accountReceiptsRes]=await Promise.all([
       sb.from('patients').select('id,file_number,full_name,phone,sex,department_id,date_of_birth,guardian_name,address,notes,is_active,created_at').eq('id',patientId).maybeSingle(),
       sb.from('patient_departments').select('department_id').eq('patient_id',patientId),
       aq,
