@@ -425,17 +425,10 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       if(!selected.length){msg($('employeeMessage'),'اختر قسمًا واحدًا على الأقل للموظف.');return;}
       if(primary&&!selected.includes(primary)){msg($('employeeMessage'),'القسم الأساسي يجب أن يكون ضمن الأقسام المحددة للموظف.');return;}
       const id=String(f.get('id')||'').trim();const payload={full_name:fullName,job_title:jobTitle,primary_department_id:primary,is_active:f.get('is_active')==='on',notes:String(f.get('notes')||'').trim()||null};if(!id)payload.created_by=state.user.id;const btn=e.currentTarget.querySelector('button[type=submit]');btn.disabled=true;
-      let saved;if(id)saved=await sb.from('sanad_employees').update(payload).eq('id',id).select('id').single();else saved=await sb.from('sanad_employees').insert(payload).select('id').single();
-      if(saved.error){btn.disabled=false;msg($('employeeMessage'),'تعذر حفظ ملف الموظف: '+saved.error.message);return;}
-      const employeeId=saved.data.id;
-      // تحديث الروابط بالفرق: لا نحذف كل الروابط ثم نعيد إدخالها حتى لا يفقد الموظف أقسامه عند أي خطأ لحظي
-      const linksNow=await sb.from('sanad_employee_departments').select('department_id').eq('employee_id',employeeId);
-      if(linksNow.error){btn.disabled=false;msg($('employeeMessage'),'تم حفظ بيانات الموظف، لكن تعذر قراءة روابط الأقسام الحالية: '+linksNow.error.message);return;}
-      const currentIds=(linksNow.data||[]).map(x=>x.department_id);
-      const toAdd=selected.filter(d=>!currentIds.includes(d)),toRemove=currentIds.filter(d=>!selected.includes(d));
-      for(const department_id of toRemove){const del=await sb.from('sanad_employee_departments').delete().eq('employee_id',employeeId).eq('department_id',department_id);if(del.error){btn.disabled=false;msg($('employeeMessage'),'تم حفظ الملف، لكن تعذر إزالة ربط قسم: '+del.error.message);return;}}
-      if(toAdd.length){const linked=await sb.from('sanad_employee_departments').insert(toAdd.map(department_id=>({employee_id:employeeId,department_id})));if(linked.error){btn.disabled=false;msg($('employeeMessage'),'تم حفظ الملف، لكن تعذر ربط الأقسام الجديدة: '+linked.error.message);return;}}
-      msg($('employeeMessage'),'تم حفظ ملف الموظف وربطه بالأقسام بنجاح.','success');await staffAccessPage();
+      const saved=await sb.rpc('sanad_save_employee_with_departments',{p_employee_id:id||null,p_full_name:fullName,p_job_title:jobTitle,p_primary_department_id:primary,p_department_ids:selected,p_is_active:f.get('is_active')==='on',p_notes:String(f.get('notes')||'').trim()||null});
+      btn.disabled=false;
+      if(saved.error){msg($('employeeMessage'),'تعذر حفظ ملف الموظف وأقسامه: '+saved.error.message);return;}
+      msg($('employeeMessage'),'تم حفظ ملف الموظف وجميع أقسامه في عملية واحدة.','success');await staffAccessPage();
     });
     $('sectionBody').querySelectorAll('[data-edit-employee]').forEach(btn=>btn.addEventListener('click',()=>{const x=employees.find(y=>y.id===btn.dataset.editEmployee);if(!x)return;const f=$('employeeForm');f.elements.id.value=x.id;f.elements.full_name.value=x.full_name||'';f.elements.job_title.value=x.job_title||'';f.elements.primary_department_id.value=x.primary_department_id||'';f.elements.notes.value=x.notes||'';f.elements.is_active.checked=x.is_active!==false;const selected=new Set(employeeLinks.filter(l=>l.employee_id===x.id).map(l=>l.department_id));if(x.primary_department_id)selected.add(x.primary_department_id);f.querySelectorAll('input[name=department_id]').forEach(c=>c.checked=selected.has(c.value));f.scrollIntoView({behavior:'smooth',block:'start'});}));
     $('sectionBody').querySelectorAll('[data-toggle-employee]').forEach(btn=>btn.addEventListener('click',async()=>{const next=btn.dataset.active!=='false'?false:true;btn.disabled=true;const {error}=await sb.from('sanad_employees').update({is_active:next}).eq('id',btn.dataset.toggleEmployee);if(error){btn.disabled=false;alert('تعذر تحديث حالة الموظف: '+error.message);return;}await staffAccessPage();}));
@@ -459,13 +452,10 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       e.preventDefault();const target=e.currentTarget,userId=target.dataset.managerForm;const selected=[...target.querySelectorAll('input[name=department_id]:checked')].map(x=>x.value);const output=target.querySelector('[data-manager-message]');
       if(!selected.length){msg(output,'اختر قسمًا واحدًا على الأقل قبل الحفظ.');return;}
       const button=target.querySelector('button[type=submit]');button.disabled=true;output.innerHTML='';
-      const upsert=await sb.from('staff_department_access').upsert(selected.map(department_id=>({user_id:userId,department_id})),{onConflict:'user_id,department_id'});
-      if(upsert.error){button.disabled=false;msg(output,'تعذر حفظ الأقسام: '+upsert.error.message);return;}
-      const primaryUpdate=await sb.from('staff_profiles').update({department_id:selected[0]}).eq('user_id',userId);
-      if(primaryUpdate.error){button.disabled=false;msg(output,'تم حفظ روابط الأقسام، لكن تعذر تحديث القسم الأساسي: '+primaryUpdate.error.message);return;}
-      const old=links.filter(x=>x.user_id===userId).map(x=>x.department_id);
-      for(const departmentId of old.filter(id=>!selected.includes(id))){const removed=await sb.from('staff_department_access').delete().eq('user_id',userId).eq('department_id',departmentId);if(removed.error){button.disabled=false;msg(output,'تم حفظ الاختيارات، لكن تعذر إزالة قسم قديم: '+removed.error.message);return;}}
-      button.disabled=false;msg(output,'تم حفظ ربط المدير الفني بالأقسام المحددة.','success');
+      const result=await sb.rpc('sanad_set_staff_department_access',{p_user_id:userId,p_department_ids:selected});
+      button.disabled=false;
+      if(result.error){msg(output,'تعذر حفظ صلاحيات الأقسام: '+result.error.message);return;}
+      msg(output,'تم حفظ جميع الأقسام والقسم الأساسي في عملية واحدة.','success');
     }));
     attachTableSearch('sectionBody','ابحث باسم الموظف أو المسمى الوظيفي أو القسم…');
   }
@@ -599,7 +589,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       const current=()=>{const from=$('stmtFrom').value,to=$('stmtTo').value,type=$('stmtType').value;return all.filter(x=>{const d=x.date?cairoDateString(new Date(x.date)):'';return (type==='all'||x.type===type)&&(!from||(d&&d>=from))&&(!to||(d&&d<=to));});};
       const draw=()=>{$('stmtBody').innerHTML=statementTableHtml(current(),fmtDay);};
       ['stmtFrom','stmtTo','stmtType'].forEach(id=>$(id).addEventListener('change',draw));draw();
-      $('stmtPrint').addEventListener('click',()=>printStatement(p,current(),fmtDay,{from:$('stmtFrom').value,to:$('stmtTo').value},{totalCharge,totalPaid,balance}));
+      $('stmtPrint').addEventListener('click',()=>{const filtered=current();const filteredCharge=filtered.reduce((n,x)=>n+x.effCharge,0),filteredPaid=filtered.reduce((n,x)=>n+x.effPaid,0);printStatement(p,filtered,fmtDay,{from:$('stmtFrom').value,to:$('stmtTo').value},{totalCharge:filteredCharge,totalPaid:filteredPaid,balance:filteredCharge-filteredPaid});});
       $('sectionBody').querySelectorAll('[data-file-void-payment]').forEach(b=>b.addEventListener('click',()=>voidPackagePaymentById(b.dataset.fileVoidPayment,()=>patientFilePage(patientId))));
       $('sectionBody').querySelectorAll('[data-file-void-entry]').forEach(b=>b.addEventListener('click',()=>voidFinancialEntry(b.dataset.fileVoidEntry,()=>patientFilePage(patientId))));
     }
@@ -762,10 +752,10 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       const overlap=(s1,e1,s2,e2)=>s1<e2&&s2<e1;
       for(let i=0;i<prepared.length;i++){
         const a=prepared[i];
-        const clashes=prepared.slice(0,i).some(b=>a.start<b.end&&b.start<a.end)||existing.some(b=>b.therapist_id===doctorId&&b.status!=='cancelled'&&a.start<new Date(new Date(b.appointment_at).getTime()+Number(b.duration_minutes||45)*60000)&&new Date(b.appointment_at)<a.end);
+        const clashes=prepared.slice(0,i).some(b=>a.start<b.end&&b.start<a.end)||existing.some(b=>b.therapist_id===doctorId&&!['cancelled','no_show'].includes(b.status)&&a.start<new Date(new Date(b.appointment_at).getTime()+Number(b.duration_minutes||45)*60000)&&new Date(b.appointment_at)<a.end);
         if(clashes)conflicts.push(a.rowNo);
         // حماية تعارض مواعيد المريض: داخل الشيت نفسه أو مع موعد قائم لنفس المريض ولو مع دكتور آخر
-        const pClash=prepared.slice(0,i).some(b=>b.patientId===a.patientId&&overlap(a.start,a.end,b.start,b.end))||existing.some(b=>b.patient_id===a.patientId&&b.status!=='cancelled'&&overlap(a.start,a.end,new Date(b.appointment_at),new Date(new Date(b.appointment_at).getTime()+Number(b.duration_minutes||45)*60000)));
+        const pClash=prepared.slice(0,i).some(b=>b.patientId===a.patientId&&overlap(a.start,a.end,b.start,b.end))||existing.some(b=>b.patient_id===a.patientId&&!['cancelled','no_show'].includes(b.status)&&overlap(a.start,a.end,new Date(b.appointment_at),new Date(new Date(b.appointment_at).getTime()+Number(b.duration_minutes||45)*60000)));
         if(pClash)patientConflicts.push(a.rowNo);
       }
       if(conflicts.length){msg($('sheetMessage'),`فيه تعارض زمني للدكتور في السطور: ${conflicts.join('، ')}. عدّل الأوقات قبل الحفظ.`);return;}
@@ -784,7 +774,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
   }
   async function cancelAppointment(id){
     if(!confirm('هل تريد إلغاء هذا الموعد؟'))return;
-    const {error}=await sb.from('sanad_calendar_appointments').update({status:'cancelled'}).eq('id',id);
+    const {error}=await sb.rpc('sanad_calendar_change_status',{p_appointment_id:id,p_new_status:'cancelled',p_notes:'إلغاء من شاشة المواعيد'});
     if(error){alert('تعذر إلغاء الموعد: '+error.message);return;}
     await appointmentsPage();
   }
@@ -1029,7 +1019,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
   async function markAppointmentNoShow(id){
     if(!isRole('admin','secretary','receptionist'))return;
     if(!confirm('تأكيد أن المريض لم يأخذ الجلسة؟ لن يتم خصم جلسة من الباقة ولن يُسجل أي إيراد.'))return;
-    const {error}=await sb.from('sanad_calendar_appointments').update({status:'no_show'}).eq('id',id).neq('status','completed');
+    const {error}=await sb.rpc('sanad_calendar_change_status',{p_appointment_id:id,p_new_status:'no_show',p_notes:'تسجيل عدم حضور المريض'});
     if(error){alert('تعذر تحديث حالة الموعد: '+error.message);return;}
     await appointmentsPage();
   }
@@ -1388,7 +1378,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
 
   async function backupPage(){
     if(!isAdmin()){setPage('النسخ الاحتياطي','<div class="notice error">النسخ الاحتياطي متاح للمدير الإداري فقط.</div>');return;}
-    const tables=['departments','patients','patient_departments','patient_department_settings','patient_medical_records','appointments','sanad_calendar_appointments','sanad_calendar_status_history','therapy_sessions','patient_packages','package_payments','package_session_usage','financial_entries','financial_closings','treasury_accounts','staff_profiles','staff_department_access','sanad_audit_logs'];
+    const tables=['departments','patients','patient_departments','patient_department_settings','patient_medical_records','appointments','sanad_calendar_appointments','sanad_calendar_status_history','therapy_sessions','patient_packages','package_payments','package_session_usage','patient_account_charges','patient_account_receipts','patient_account_payment_allocations','financial_entries','financial_closings','treasury_accounts','sanad_employees','sanad_employee_departments','staff_profiles','staff_department_access','sanad_audit_logs'];
     setPage('النسخ الاحتياطي',`<p>يمكنك تنزيل نسخة بيانات تشغيلية من جداول مركز سند في ملف JSON واحد، تشمل بيانات المرضى والأقسام والسجلات الطبية والمواعيد والجلسات والباقات والمالية والموظفين وسجل العمليات.</p><div class="notice">الملف يحتوي بيانات شخصية وطبية ومالية حساسة. احفظه في مكان مشفر ومحدود الوصول، ولا ترسله عبر واتساب أو بريد غير آمن. النسخة لا تشمل حسابات الدخول في Supabase Auth أو إعدادات المشروع ومفاتيحه.</div><div class="analysis-note"><strong>الاستعادة:</strong> لا تستعد الملف من داخل الموقع مباشرة. عند الحاجة للاستعادة، استخدم نسخة قاعدة البيانات من لوحة Supabase أو اطلب تنفيذ استعادة منظمة عبر SQL بعد التأكد من العلاقات والمعرفات. لا ترفع ملف النسخة إلى مستودع GitHub العام.</div><div class="toolbar"><button class="btn" id="runBackup" type="button">تنزيل نسخة بيانات JSON</button><span class="muted small">سيتم قراءة الجداول الـ ${tables.length} مع تقسيم القراءة إلى دفعات حتى لا تُسقط السجلات الزائدة عن حد العرض.</span></div><div id="backupMessage" aria-live="polite"></div><div id="backupProgress" class="muted small" style="margin-top:10px"></div>`);
     $('runBackup')?.addEventListener('click',async()=>{
       const btn=$('runBackup'),message=$('backupMessage'),progress=$('backupProgress');btn.disabled=true;msg(message,'');progress.textContent='جارٍ تجهيز النسخة…';
