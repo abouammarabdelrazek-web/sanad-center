@@ -289,7 +289,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     const todayBounds=cairoDayBounds();
     let apptQ=sb.from('sanad_calendar_appointments').select('id',{count:'exact',head:true}).gte('appointment_at',todayBounds.start).lt('appointment_at',todayBounds.end);
     let managerPatientCount;
-    if(role==='technical_manager' && state.managerDepartments.length){
+    if(['technical_manager','therapist'].includes(role) && state.managerDepartments.length){
       apptQ=apptQ.in('department_id',state.managerDepartments);
       const links=await sb.from('patient_departments').select('patient_id').in('department_id',state.managerDepartments);
       managerPatientCount=links.error?null:new Set((links.data||[]).map(x=>x.patient_id)).size;
