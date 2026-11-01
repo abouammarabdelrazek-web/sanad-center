@@ -688,7 +688,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     $('todaySchedule').addEventListener('click',()=>goDay(cairoDateString()));
     $('addApptBtn')?.addEventListener('click',()=>appointmentForm());
     const bounds=cairoDayBounds(day);
-    let q=sb.from('sanad_calendar_appointments').select('id,patient_id,department_id,therapist_id,appointment_at,appointment_end_at,duration_minutes,status,notes,appointment_type,package_id,session_price,patients(full_name)').gte('appointment_at',bounds.start).lt('appointment_at',bounds.end).order('appointment_at',{ascending:true}).limit(500);
+    let q=sb.from('sanad_calendar_appointments').select('id,patient_id,department_id,therapist_id,appointment_at,appointment_end_at,duration_minutes,status,notes,appointment_type,package_id,session_price,collected_amount,patients(full_name)').gte('appointment_at',bounds.start).lt('appointment_at',bounds.end).order('appointment_at',{ascending:true}).limit(500);
     if(state.profile.role==='technical_manager'&&state.managerDepartments.length)q=q.in('department_id',state.managerDepartments);
     const [apptRes,reviewRes]=await Promise.all([q,sb.from('sanad_monthly_schedule_reviews').select('month_start,status,reviewed_at').eq('month_start',monthStart).maybeSingle()]);
     // لو المستخدم انتقل ليوم آخر أو صفحة أخرى أثناء التحميل، لا نرسم نتيجة قديمة
@@ -715,6 +715,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
         if(a.status!=='completed')actions+=`<button class="btn ghost" data-act="edit" data-id="${esc(a.id)}" type="button">تعديل</button>`;
         if(a.status==='scheduled'&&!isAssess)actions+=`<button class="btn ghost" data-act="noshow" data-id="${esc(a.id)}" type="button">لم يحضر</button>`;
         if(a.status==='scheduled')actions+=`<button class="btn danger" data-act="cancel" data-id="${esc(a.id)}" type="button">إلغاء</button>`;
+        if(isRole('admin','secretary')&&a.status==='completed'&&!isAssess)actions+=`<button class="btn danger" data-act="reverse" data-id="${esc(a.id)}" type="button">تصحيح جلسة مكتملة</button>`;
         if(isAdmin()&&a.status!=='completed')actions+=`<button class="btn danger" data-delete="appointment" data-id="${esc(a.id)}" type="button">حذف</button>`;
       }
       const badgeClass=['cancelled','no_show'].includes(a.status)?'cancelled':a.status==='pending'?'pending':'';
@@ -724,7 +725,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     list.addEventListener('click',e=>{
       const b=e.target.closest('[data-act]');if(!b)return;
       const id=b.dataset.id;
-      ({edit:()=>appointmentForm(id),cancel:()=>cancelAppointment(id),complete:()=>completeTherapyAppointment(id),assess:()=>completeAssessment(id),noshow:()=>markAppointmentNoShow(id)})[b.dataset.act]?.();
+      ({edit:()=>appointmentForm(id),cancel:()=>cancelAppointment(id),complete:()=>completeTherapyAppointment(id),assess:()=>completeAssessment(id),noshow:()=>markAppointmentNoShow(id),reverse:()=>reverseCompletedSession(id)})[b.dataset.act]?.();
     });
   }
   async function bulkSchedulePage(){
@@ -1074,6 +1075,35 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       if(result.error){msg($('completeSessionMessage'),'تعذر إتمام الجلسة: '+result.error.message);return;}
       msg($('completeSessionMessage'),isPackage?'تم تأكيد الجلسة وخصم جلسة واحدة من الباقة دون تكرار الإيراد.':'تم تأكيد الجلسة وتسجيل المبلغ المحصل في الإيرادات.','success');
       setTimeout(appointmentsPage,800);
+    });
+  }
+  async function reverseCompletedSession(id){
+    if(!isRole('admin','secretary'))return;
+    const {data:appt,error}=await sb.from('sanad_calendar_appointments')
+      .select('id,patient_id,status,appointment_type,package_id,collected_amount,patients(full_name)')
+      .eq('id',id).maybeSingle();
+    if(error||!appt){alert('تعذر تحميل بيانات الجلسة: '+(error?.message||'غير موجود'));return;}
+    if(appt.status!=='completed'||appt.appointment_type!=='therapy'){alert('هذا الإجراء متاح للجلسات العلاجية المكتملة فقط.');return;}
+    const amount=Number(appt.collected_amount||0),isPackage=!!appt.package_id;
+    const refundFields=!isPackage&&amount>0?'<div class="notice warning">المبلغ الذي يجب رده فعليًا: <strong>'+money(amount)+'</strong>. لن يسمح النظام بالتراجع قبل تسجيل طريقة الرد وإثباته.</div><div class="field"><label>طريقة رد المبلغ</label><select name="refund_method" required><option value="cash">نقدي</option><option value="card">رد إلى البطاقة</option><option value="transfer">تحويل بنكي/محفظة</option><option value="other">أخرى</option></select></div><div class="field"><label>الرقم المرجعي للإيصال أو التحويل (إن وجد)</label><input name="refund_reference" maxlength="160" placeholder="رقم الإيصال / مرجع التحويل"></div><div class="field"><label>وصف إثبات الرد وتفاصيله</label><textarea name="refund_proof" minlength="5" required placeholder="مثال: تم رد المبلغ نقدًا للمريض واستلم المبلغ بالكامل بحضور..."></textarea></div>':'';
+    const packageNote=isPackage?'<div class="notice">الجلسة على باقة: سيتم إعادة الجلسة إلى رصيد الباقة، ولا يوجد رد نقدي مرتبط بإتمام هذه الجلسة.</div>':amount===0?'<div class="notice">لا يوجد مبلغ محصل مرتبط بهذه الجلسة؛ لن يُطلب إثبات رد مالي.</div>':'';
+    const html='<form id="reverseSessionForm"><p>المريض: <strong>'+esc(appt.patients?.full_name||'—')+'</strong></p>'+packageNote+refundFields+'<div class="field"><label>سبب تصحيح الجلسة</label><textarea name="reason" minlength="3" required placeholder="اكتب سبب التراجع بوضوح"></textarea></div><div class="notice error">هذا الإجراء سيعكس تسجيل الجلسة وسجلها المالي/العلاجي، ويحتفظ بسجل التدقيق. لا تستخدمه إذا كانت الجلسة قد تمت بالفعل بشكل صحيح.</div><div class="toolbar"><button class="btn danger" type="submit">تأكيد التصحيح'+(amount>0&&!isPackage?' بعد إثبات رد المبلغ':'')+'</button><button class="btn ghost" id="cancelReverseSession" type="button">رجوع</button></div><div id="reverseSessionMessage"></div></form>';
+    setPage('تصحيح جلسة مكتملة',html);
+    $('cancelReverseSession').addEventListener('click',appointmentsPage);
+    $('reverseSessionForm').addEventListener('submit',async e=>{
+      e.preventDefault();const form=new FormData(e.currentTarget);
+      const reason=String(form.get('reason')||'').trim();
+      const refundMethod=isPackage||amount===0?null:String(form.get('refund_method')||'');
+      const refundReference=isPackage||amount===0?null:String(form.get('refund_reference')||'').trim()||null;
+      const refundProof=isPackage||amount===0?null:String(form.get('refund_proof')||'').trim()||null;
+      if(reason.length<3){msg($('reverseSessionMessage'),'اكتب سببًا واضحًا للتصحيح.');return;}
+      if(amount>0&&!isPackage&&(!refundMethod||(!refundReference&&(!refundProof||refundProof.length<5)))){msg($('reverseSessionMessage'),'أدخل طريقة الرد وإثباته أو الرقم المرجعي.');return;}
+      const btn=e.currentTarget.querySelector('button[type=submit]');btn.disabled=true;
+      const result=await sb.rpc('sanad_reverse_completed_session',{p_appointment_id:id,p_reason:reason,p_refund_method:refundMethod,p_refund_reference:refundReference,p_refund_proof:refundProof});
+      btn.disabled=false;
+      if(result.error){msg($('reverseSessionMessage'),'تعذر تصحيح الجلسة: '+result.error.message);return;}
+      msg($('reverseSessionMessage'),'تم تصحيح الجلسة وتسجيل إثبات رد المبلغ عند وجود تحصيل.','success');
+      setTimeout(appointmentsPage,900);
     });
   }
   async function therapistWorkPage(){
