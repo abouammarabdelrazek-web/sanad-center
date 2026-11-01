@@ -530,8 +530,11 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       clinicalEnabled?sb.from('therapy_sessions').select('id,department_id,session_date,duration_minutes,treatment_provided,patient_response,home_program,therapist_id,calendar_appointment_id,voided_at,void_reason').eq('patient_id',patientId).in('department_id',state.managerDepartments).order('session_date',{ascending:false}).limit(300):Promise.resolve(none),
       showMoney?sb.from('sanad_patient_account_statement').select('charge_id,patient_id,department_id,department_name,calendar_appointment_id,therapy_session_id,charge_amount,paid_amount,remaining_amount,charge_date,session_date,therapist_id,therapist_name,voided_at').eq('patient_id',patientId).order('charge_date',{ascending:true}):Promise.resolve(none),
       showMoney?sb.from('patient_account_receipts').select('id,patient_id,calendar_appointment_id,amount,payment_method,payment_date,notes,created_at').eq('patient_id',patientId).order('payment_date',{ascending:true}):Promise.resolve(none),
-      showMoney?sb.from('patient_account_payment_allocations').select('id,receipt_id,charge_id,amount,voided_at,void_reason').order('created_at',{ascending:true}):Promise.resolve(none)
+      Promise.resolve(none)
     ]);
+    const accountAllocationsRes=showMoney&&(accountReceiptsRes.data||[]).length
+      ?await sb.from('patient_account_payment_allocations').select('id,receipt_id,charge_id,amount,voided_at,void_reason').in('receipt_id',accountReceiptsRes.data.map(x=>x.id)).order('created_at',{ascending:true})
+      :none;
     if(pRes.error||!pRes.data){setPage('ملف المريض',`<div class="notice error">تعذر تحميل الملف: ${esc(pRes.error?.message||'المريض غير موجود أو لا تملك صلاحية عرضه')}</div>`,actions);wire();return;}
     const p=pRes.data;
     const deptIds=[...new Set([...(lRes.data||[]).map(x=>x.department_id),p.department_id].filter(Boolean))];
@@ -587,7 +590,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       // توافق تاريخي فقط: لا نكرر أي جلسة موجودة بالفعل في دفتر المديونيات.
       appts.filter(a=>a.status==='completed'&&!a.package_id&&a.appointment_type!=='assessment'&&!ledgerAppointmentIds.has(a.id)).forEach(a=>{const eid=entryByAppt[a.id];stmtRows.push({date:a.appointment_at,label:'جلسة فردية — '+deptName(a.department_id)+' (سجل قديم)',type:'session',charge:Number(a.session_price||0),paid:Number(a.collected_amount||0),voided:eid?reversedEntries.has(eid):false});});
       stmtInfo={remainingSessions:pkgs.filter(k=>k.status==='active').reduce((n,k)=>n+Number(k.remaining_sessions||0),0)};
-      const statementHtml=`<h4 style="margin-top:22px">كشف حساب المريض</h4><div id="stmtSummary"></div><div class="chart-filters"><div class="field"><label>من تاريخ</label><input type="date" id="stmtFrom"></div><div class="field"><label>إلى تاريخ</label><input type="date" id="stmtTo"></div><div class="field"><label>النوع</label><select id="stmtType"><option value="all">الكل</option><option value="package">الباقات</option><option value="payment">دفعات الباقات</option><option value="session">الجلسات الفردية</option><option value="payment">التحصيلات</option></select></div><button class="btn secondary" id="stmtPrint" type="button">طباعة / حفظ PDF</button></div><div id="stmtBody"></div>`;
+      const statementHtml=`<h4 style="margin-top:22px">كشف حساب المريض</h4><div id="stmtSummary"></div><div class="chart-filters"><div class="field"><label>من تاريخ</label><input type="date" id="stmtFrom"></div><div class="field"><label>إلى تاريخ</label><input type="date" id="stmtTo"></div><div class="field"><label>النوع</label><select id="stmtType"><option value="all">الكل</option><option value="package">الباقات</option><option value="payment">دفعات الباقات والتحصيلات</option><option value="session">الجلسات الفردية</option></select></div><button class="btn secondary" id="stmtPrint" type="button">طباعة / حفظ PDF</button></div><div id="stmtBody"></div>`;
       money_html=`<h4 style="margin-top:22px">الباقات</h4>${pkgTable}<h4 style="margin-top:22px">المعاملات المالية (${moves.length})</h4>${moveTable}${statementHtml}`;
     }
     let clinicalHtml='';
