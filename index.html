@@ -684,8 +684,8 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       if(editable){
         if(open)actions+=isAssess?`<button class="btn secondary" data-act="assess" data-id="${esc(a.id)}" type="button">تأكيد إتمام الكشف</button>`:`<button class="btn secondary" data-act="complete" data-id="${esc(a.id)}" type="button">إتمام الجلسة</button>`;
         if(a.status!=='completed')actions+=`<button class="btn ghost" data-act="edit" data-id="${esc(a.id)}" type="button">تعديل</button>`;
-        if(open&&!isAssess)actions+=`<button class="btn ghost" data-act="noshow" data-id="${esc(a.id)}" type="button">لم يحضر</button>`;
-        if(a.status!=='cancelled'&&a.status!=='completed')actions+=`<button class="btn danger" data-act="cancel" data-id="${esc(a.id)}" type="button">إلغاء</button>`;
+        if(a.status==='scheduled'&&!isAssess)actions+=`<button class="btn ghost" data-act="noshow" data-id="${esc(a.id)}" type="button">لم يحضر</button>`;
+        if(a.status==='scheduled')actions+=`<button class="btn danger" data-act="cancel" data-id="${esc(a.id)}" type="button">إلغاء</button>`;
         if(isAdmin()&&a.status!=='completed')actions+=`<button class="btn danger" data-delete="appointment" data-id="${esc(a.id)}" type="button">حذف</button>`;
       }
       const badgeClass=['cancelled','no_show'].includes(a.status)?'cancelled':a.status==='pending'?'pending':'';
