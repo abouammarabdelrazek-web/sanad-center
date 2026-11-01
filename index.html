@@ -949,9 +949,9 @@ tr.voided td{opacity:.55;text-decoration:line-through}
           // الجلسة المكتملة سعرها مسجل في الحسابات؛ لا نمسّه من نموذج الموعد أبدًا
           session_price:existing?.status==='completed'?(existing.session_price??null):null
         };
-        if(payload.status!=='cancelled'){
+        if(!['cancelled','no_show'].includes(payload.status)){
           const fmtT=v=>new Date(v).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'});
-          let tq=sb.from('sanad_calendar_appointments').select('id,appointment_at,appointment_end_at,patients(full_name)').eq('therapist_id',payload.therapist_id).neq('status','cancelled').lt('appointment_at',payload.appointment_end_at).gt('appointment_end_at',payload.appointment_at).limit(1);
+          let tq=sb.from('sanad_calendar_appointments').select('id,appointment_at,appointment_end_at,patients(full_name)').eq('therapist_id',payload.therapist_id).not('status','in','(cancelled,no_show)').lt('appointment_at',payload.appointment_end_at).gt('appointment_end_at',payload.appointment_at).limit(1);
           if(editId)tq=tq.neq('id',editId);
           const therapistClash=await tq;
           if(therapistClash.error)throw new Error('تعذر فحص تعارض مواعيد المعالج: '+therapistClash.error.message);
@@ -960,7 +960,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
             msg(message,`المعالج عنده موعد في نفس الوقت (${fmtT(c.appointment_at)} – ${fmtT(c.appointment_end_at)}) للمريض ${c.patients?.full_name||'—'}. اختر وقتًا آخر أو معالجًا آخر.`);
             return;
           }
-          let pq=sb.from('sanad_calendar_appointments').select('id,appointment_at,appointment_end_at').eq('patient_id',payload.patient_id).neq('status','cancelled').lt('appointment_at',payload.appointment_end_at).gt('appointment_end_at',payload.appointment_at).limit(1);
+          let pq=sb.from('sanad_calendar_appointments').select('id,appointment_at,appointment_end_at').eq('patient_id',payload.patient_id).not('status','in','(cancelled,no_show)').lt('appointment_at',payload.appointment_end_at).gt('appointment_end_at',payload.appointment_at).limit(1);
           if(editId)pq=pq.neq('id',editId);
           const patientClash=await pq;
           if(patientClash.error)throw new Error('تعذر فحص تعارض مواعيد المريض: '+patientClash.error.message);
