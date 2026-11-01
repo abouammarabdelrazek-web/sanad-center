@@ -584,7 +584,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
             stmtRows.push({date:receipt.payment_date,label:'تحصيل مديونية — '+(charge?.department_name||'قسم غير محدد')+(receipt.notes?' — '+receipt.notes:''),type:'payment',charge:0,paid:Number(allocation.amount||0),voided:false,receiptId:receipt.id,allocationId:allocation.id});
           });
         }else{
-          stmtRows.push({date:receipt.payment_date,label:'إيصال تحصيل غير موزع — '+(receipt.notes||''),type:'payment',charge:0,paid:0,voided:false,receiptId:receipt.id,unallocated:Number(receipt.amount||0)});
+          stmtRows.push({date:receipt.payment_date,label:'إيصال تحصيل غير موزع — القيمة الأصلية '+money(receipt.amount)+' (غير محسوب ضمن المدفوع)'+(receipt.notes?' — '+receipt.notes:''),type:'payment',charge:0,paid:0,voided:false,receiptId:receipt.id,unallocated:Number(receipt.amount||0)});
         }
       });
       // توافق تاريخي فقط: لا نكرر أي جلسة موجودة بالفعل في دفتر المديونيات.
