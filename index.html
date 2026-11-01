@@ -520,14 +520,17 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     if(state.profile.role==='technical_manager')aq=aq.in('department_id',state.managerDepartments);
     const none={data:[],error:null};
     const clinicalEnabled=state.profile.role==='technical_manager';
-    const [pRes,lRes,aRes,kRes,payRes,medicalRes,sessionsRes]=await Promise.all([
+    const [pRes,lRes,aRes,kRes,payRes,medicalRes,sessionsRes,accountChargesRes,accountReceiptsRes,accountAllocationsRes]=await Promise.all([
       sb.from('patients').select('id,file_number,full_name,phone,sex,department_id,date_of_birth,guardian_name,address,notes,is_active,created_at').eq('id',patientId).maybeSingle(),
       sb.from('patient_departments').select('department_id').eq('patient_id',patientId),
       aq,
       showMoney?sb.from('sanad_package_summary').select('*').eq('patient_id',patientId).order('purchased_at',{ascending:false}):Promise.resolve(none),
       showMoney?sb.from('package_payments').select('id,package_id,amount,payment_method,payment_date,reference_number,voided_at,void_reason').eq('patient_id',patientId).order('payment_date',{ascending:false}):Promise.resolve(none),
       clinicalEnabled?sb.from('patient_medical_records').select('id,diagnosis,chief_complaint,medical_history,previous_surgeries,medications,allergies,initial_assessment,treatment_goals,treatment_plan,clinical_notes,updated_at').eq('patient_id',patientId).maybeSingle():Promise.resolve(none),
-      clinicalEnabled?sb.from('therapy_sessions').select('id,department_id,session_date,duration_minutes,treatment_provided,patient_response,home_program,therapist_id,calendar_appointment_id,voided_at,void_reason').eq('patient_id',patientId).in('department_id',state.managerDepartments).order('session_date',{ascending:false}).limit(300):Promise.resolve(none)
+      clinicalEnabled?sb.from('therapy_sessions').select('id,department_id,session_date,duration_minutes,treatment_provided,patient_response,home_program,therapist_id,calendar_appointment_id,voided_at,void_reason').eq('patient_id',patientId).in('department_id',state.managerDepartments).order('session_date',{ascending:false}).limit(300):Promise.resolve(none),
+      showMoney?sb.from('sanad_patient_account_statement').select('charge_id,patient_id,department_id,department_name,calendar_appointment_id,therapy_session_id,charge_amount,paid_amount,remaining_amount,charge_date,session_date,therapist_id,therapist_name,voided_at').eq('patient_id',patientId).order('charge_date',{ascending:true}):Promise.resolve(none),
+      showMoney?sb.from('patient_account_receipts').select('id,patient_id,calendar_appointment_id,amount,payment_method,payment_date,notes,created_at').eq('patient_id',patientId).order('payment_date',{ascending:true}):Promise.resolve(none),
+      showMoney?sb.from('patient_account_payment_allocations').select('id,receipt_id,charge_id,amount,voided_at,void_reason').order('created_at',{ascending:true}):Promise.resolve(none)
     ]);
     if(pRes.error||!pRes.data){setPage('ملف المريض',`<div class="notice error">تعذر تحميل الملف: ${esc(pRes.error?.message||'المريض غير موجود أو لا تملك صلاحية عرضه')}</div>`,actions);wire();return;}
     const p=pRes.data;
@@ -540,7 +543,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     const sessionCollections=appts.filter(a=>a.status==='completed'&&Number(a.collected_amount||0)>0);
     const paidPackages=pays.filter(x=>!x.voided_at).reduce((n,x)=>n+Number(x.amount||0),0),paidSessions=sessionCollections.reduce((n,x)=>n+Number(x.collected_amount||0),0);
     const pkgName=id=>pkgs.find(x=>x.package_id===id)?.package_name||'باقة';
-    const errs=[aRes,kRes,payRes,medicalRes,sessionsRes].filter(x=>x.error).map(x=>x.error.message);
+    const errs=[aRes,kRes,payRes,medicalRes,sessionsRes,accountChargesRes,accountReceiptsRes,accountAllocationsRes].filter(x=>x.error).map(x=>x.error.message);
     const info=(l,v)=>`<div class="info-item"><small>${l}</small><div>${v}</div></div>`;
     const sexLabel=({male:'ذكر',female:'أنثى'})[p.sex]||'—';
     const apptTable=appts.length?`<div class="table-wrap"><table><thead><tr><th>التاريخ والوقت</th><th>القسم</th><th>المعالج</th><th>النوع</th><th>الحالة</th>${showMoney?'<th>سعر الجلسة</th><th>المحصل</th>':''}</tr></thead><tbody>${appts.map(a=>`<tr><td>${fmt(a.appointment_at)}</td><td>${esc(deptName(a.department_id))}</td><td>${esc(staffName(a.therapist_id))}</td><td>${a.appointment_type==='assessment'?'كشف':'جلسة'}${a.package_id?' (باقة)':''}</td><td><span class="badge ${['cancelled','no_show'].includes(a.status)?'cancelled':a.status==='pending'?'pending':''}">${esc(statusName(a.status))}</span></td>${showMoney?`<td>${a.session_price!=null?money(a.session_price):'—'}</td><td>${a.status==='completed'&&a.collected_amount!=null?money(a.collected_amount):'—'}</td>`:''}</tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد مواعيد مسجلة لهذا المريض.</div>';
@@ -561,12 +564,30 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       const moves=[...pays.map(x=>({date:x.payment_date,kind:'دفعة باقة — '+pkgName(x.package_id),amount:x.amount,method:x.payment_method,ref:x.reference_number,voided:!!x.voided_at,reason:x.void_reason,payId:x.id})),...sessionCollections.map(a=>{const eid=entryByAppt[a.id]||null;return {date:a.appointment_at,kind:'جلسة فردية — '+deptName(a.department_id),amount:a.collected_amount,method:a.payment_method,ref:'',voided:eid?reversedEntries.has(eid):false,reason:'',entryId:eid};})].sort((a,b)=>new Date(b.date)-new Date(a.date));
       const moveAction=x=>x.voided?'—':x.payId?`<button class="btn danger" data-file-void-payment="${esc(x.payId)}" type="button">حذف الدفعة</button>`:x.entryId?`<button class="btn danger" data-file-void-entry="${esc(x.entryId)}" type="button">حذف الإيراد</button>`:'—';
       const moveTable=moves.length?`<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>البيان</th><th>المبلغ</th><th>طريقة الدفع</th><th>المرجع</th><th>الحالة</th>${canVoidMoney?'<th>إجراء</th>':''}</tr></thead><tbody>${moves.map(x=>`<tr><td>${fmt(x.date)}</td><td>${esc(x.kind)}</td><td>${money(x.amount)}</td><td>${esc(method[x.method]||x.method||'—')}</td><td>${esc(x.ref||'—')}</td><td>${x.voided?`<span class="badge danger">محذوفة — غير محسوبة</span><div class="muted small">${esc(x.reason||'')}</div>`:'<span class="badge">سارية</span>'}</td>${canVoidMoney?`<td>${moveAction(x)}</td>`:''}</tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد مدفوعات مسجلة.</div>';
-      // كشف الحساب: مستحقات (باقات + جلسات فردية) مقابل المدفوع
+      // كشف الحساب: الباقات منفصلة، والجلسات الفردية والتحصيلات من دفتر المديونيات المعتمد.
       pkgs.forEach(k=>{if(k.status!=='cancelled'||Number(k.total_paid||0)>0)stmtRows.push({date:k.purchased_at||k.created_at||null,label:'باقة — '+k.package_name,type:'package',charge:Number(k.package_total||0),paid:0,voided:false});});
       pays.forEach(x=>stmtRows.push({date:x.payment_date,label:'دفعة باقة — '+pkgName(x.package_id)+(x.reference_number?' ('+x.reference_number+')':''),type:'payment',charge:0,paid:Number(x.amount||0),voided:!!x.voided_at}));
-      appts.filter(a=>a.status==='completed'&&!a.package_id&&a.appointment_type!=='assessment').forEach(a=>{const eid=entryByAppt[a.id];stmtRows.push({date:a.appointment_at,label:'جلسة فردية — '+deptName(a.department_id),type:'session',charge:Number(a.session_price||0),paid:Number(a.collected_amount||0),voided:eid?reversedEntries.has(eid):false});});
+      const ledgerCharges=accountChargesRes.data||[],ledgerReceipts=accountReceiptsRes.data||[],ledgerAllocations=accountAllocationsRes.data||[];
+      const chargeById=Object.fromEntries(ledgerCharges.map(x=>[x.charge_id,x]));
+      const allocatedByReceipt={};
+      ledgerAllocations.filter(x=>!x.voided_at).forEach(x=>{(allocatedByReceipt[x.receipt_id]??=[]).push(x);});
+      const ledgerAppointmentIds=new Set(ledgerCharges.map(x=>x.calendar_appointment_id).filter(Boolean));
+      ledgerCharges.forEach(x=>stmtRows.push({date:x.session_date||x.charge_date,label:'جلسة فردية — '+(x.department_name||deptName(x.department_id))+(x.therapist_name?' — '+x.therapist_name:''),type:'session',charge:Number(x.charge_amount||0),paid:0,voided:!!x.voided_at,chargeId:x.charge_id,appointmentId:x.calendar_appointment_id}));
+      ledgerReceipts.forEach(receipt=>{
+        const allocations=allocatedByReceipt[receipt.id]||[];
+        if(allocations.length){
+          allocations.forEach(allocation=>{
+            const charge=chargeById[allocation.charge_id];
+            stmtRows.push({date:receipt.payment_date,label:'تحصيل مديونية — '+(charge?.department_name||'قسم غير محدد')+(receipt.notes?' — '+receipt.notes:''),type:'payment',charge:0,paid:Number(allocation.amount||0),voided:false,receiptId:receipt.id,allocationId:allocation.id});
+          });
+        }else{
+          stmtRows.push({date:receipt.payment_date,label:'إيصال تحصيل غير موزع — '+(receipt.notes||''),type:'payment',charge:0,paid:0,voided:false,receiptId:receipt.id,unallocated:Number(receipt.amount||0)});
+        }
+      });
+      // توافق تاريخي فقط: لا نكرر أي جلسة موجودة بالفعل في دفتر المديونيات.
+      appts.filter(a=>a.status==='completed'&&!a.package_id&&a.appointment_type!=='assessment'&&!ledgerAppointmentIds.has(a.id)).forEach(a=>{const eid=entryByAppt[a.id];stmtRows.push({date:a.appointment_at,label:'جلسة فردية — '+deptName(a.department_id)+' (سجل قديم)',type:'session',charge:Number(a.session_price||0),paid:Number(a.collected_amount||0),voided:eid?reversedEntries.has(eid):false});});
       stmtInfo={remainingSessions:pkgs.filter(k=>k.status==='active').reduce((n,k)=>n+Number(k.remaining_sessions||0),0)};
-      const statementHtml=`<h4 style="margin-top:22px">كشف حساب المريض</h4><div id="stmtSummary"></div><div class="chart-filters"><div class="field"><label>من تاريخ</label><input type="date" id="stmtFrom"></div><div class="field"><label>إلى تاريخ</label><input type="date" id="stmtTo"></div><div class="field"><label>النوع</label><select id="stmtType"><option value="all">الكل</option><option value="package">الباقات</option><option value="payment">دفعات الباقات</option><option value="session">الجلسات الفردية</option></select></div><button class="btn secondary" id="stmtPrint" type="button">طباعة / حفظ PDF</button></div><div id="stmtBody"></div>`;
+      const statementHtml=`<h4 style="margin-top:22px">كشف حساب المريض</h4><div id="stmtSummary"></div><div class="chart-filters"><div class="field"><label>من تاريخ</label><input type="date" id="stmtFrom"></div><div class="field"><label>إلى تاريخ</label><input type="date" id="stmtTo"></div><div class="field"><label>النوع</label><select id="stmtType"><option value="all">الكل</option><option value="package">الباقات</option><option value="payment">دفعات الباقات</option><option value="session">الجلسات الفردية</option><option value="payment">التحصيلات</option></select></div><button class="btn secondary" id="stmtPrint" type="button">طباعة / حفظ PDF</button></div><div id="stmtBody"></div>`;
       money_html=`<h4 style="margin-top:22px">الباقات</h4>${pkgTable}<h4 style="margin-top:22px">المعاملات المالية (${moves.length})</h4>${moveTable}${statementHtml}`;
     }
     let clinicalHtml='';
