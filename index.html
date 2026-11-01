@@ -88,7 +88,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
   const menu = [
     ['overview','⌂','نظرة عامة',['admin','secretary','receptionist','accountant','technical_manager','therapist']],
     ['management','▥','لوحة الإدارة والتقارير',['admin']],
-    ['patients','♙','المرضى',['admin','secretary','receptionist','technical_manager']],
+    ['patients','♙','المرضى',['admin','secretary','receptionist','technical_manager','therapist']],
     ['appointments','▦','المواعيد والجلسات',['admin','secretary','receptionist','technical_manager']],
     ['bulkSchedule','▤','توزيع جدول دكتور',['admin','secretary','receptionist']],
     ['followup','◎','متابعة المرضى',['admin','secretary','receptionist','technical_manager']],
@@ -557,7 +557,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     let aq=sb.from('sanad_calendar_appointments').select('id,department_id,therapist_id,appointment_at,duration_minutes,status,appointment_type,package_id,session_price,collected_amount,payment_method').eq('patient_id',patientId).order('appointment_at',{ascending:false}).limit(500);
     if(state.profile.role==='technical_manager')aq=aq.in('department_id',state.managerDepartments);
     const none={data:[],error:null};
-    const clinicalEnabled=state.profile.role==='technical_manager';
+    const clinicalEnabled=['technical_manager','therapist'].includes(state.profile.role);
     const [pRes,lRes,aRes,kRes,payRes,medicalRes,sessionsRes,accountChargesRes,accountReceiptsRes,refundsRes]=await Promise.all([
       sb.from('patients').select('id,file_number,full_name,phone,sex,department_id,date_of_birth,guardian_name,address,notes,is_active,created_at').eq('id',patientId).maybeSingle(),
       sb.from('patient_departments').select('department_id').eq('patient_id',patientId),
