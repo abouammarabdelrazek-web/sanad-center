@@ -1035,15 +1035,13 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     await appointmentsPage();
   }
   async function callCompleteAppointment(id,amount,method,price){
-    const base={p_appointment_id:id,p_collected_amount:amount,p_payment_method:method};
-    const missing=r=>r.error&&(r.error.code==='PGRST202'||/could not find the function|schema cache/i.test(r.error.message||''));
-    // الإصدار الحالي من الدالة يستقبل p_session_price. لو قاعدة البيانات ما زالت بالتوقيع القديم نحفظ السعر على الموعد ثم نستدعي الدالة القديمة.
-    let result=await sb.rpc('sanad_calendar_complete_appointment',{...base,p_session_price:price});
-    if(missing(result)){
-      if(price!=null){const up=await sb.from('sanad_calendar_appointments').update({session_price:price}).eq('id',id).neq('status','completed');if(up.error)return {data:null,error:up.error};}
-      result=await sb.rpc('sanad_calendar_complete_appointment',base);
-    }
-    return result;
+    // إتمام الجلسة عملية مالية/علاجية ذرية؛ لا نستخدم توقيعًا قديمًا ولا نحدّث حقول الموعد مباشرة.
+    return await sb.rpc('sanad_calendar_complete_appointment',{
+      p_appointment_id:id,
+      p_collected_amount:amount,
+      p_payment_method:method,
+      p_session_price:price
+    });
   }
   async function markAppointmentNoShow(id){
     if(!isRole('admin','secretary','receptionist'))return;
