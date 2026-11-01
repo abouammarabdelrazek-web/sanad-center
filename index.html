@@ -269,7 +269,10 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     renderNav(); await showPage('overview');
   }
   function renderNav(){
-    $('sidebar').innerHTML=visibleMenu().map(([id,icon,label])=>`<button class="navbtn ${state.page===id?'active':''}" data-page="${id}" type="button"><span class="navicon">${icon}</span><span>${label}</span></button>`).join('');
+    $('sidebar').innerHTML=visibleMenu().map(([id,icon,originalLabel])=>{
+      const label=id==='overview'&&!isAdmin()?'الرئيسية':originalLabel;
+      return `<button class="navbtn ${state.page===id?'active':''}" data-page="${id}" type="button"><span class="navicon">${icon}</span><span>${label}</span></button>`;
+    }).join('');
     $('sidebar').querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.page==='departments')state.selectedDepartment=null;showPage(b.dataset.page);}));
   }
   function setPage(title,body,actions=''){ $('sectionTitle').textContent=title;$('sectionBody').innerHTML=body;$('sectionActions').innerHTML=actions; }
