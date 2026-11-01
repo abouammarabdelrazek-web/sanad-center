@@ -232,15 +232,21 @@ tr.voided td{opacity:.55;text-decoration:line-through}
   function allowedDepartments(){return ['technical_manager','therapist'].includes(state.profile?.role) ? state.departments.filter(d=>state.managerDepartments.includes(d.id)) : state.departments;}
   function departmentFilter(query){return ['technical_manager','therapist'].includes(state.profile?.role) ? query.in('department_id',state.managerDepartments) : query;}
   function staffName(id){return state.therapists.find(x=>x.id===id)?.full_name||state.staff.find(x=>x.user_id===id)?.full_name||(id&&id===state.user?.id?state.profile?.full_name:null)||'غير محدد';}
+  function mapScheduleTherapists(rows){
+    const byId=new Map();
+    (rows||[]).forEach(r=>{
+      if(!byId.has(r.employee_id))byId.set(r.employee_id,{id:r.employee_id,full_name:r.full_name,job_title:r.job_title,primary_department_id:r.primary_department_id,is_active:r.is_active,department_ids:[]});
+      const employee=byId.get(r.employee_id);
+      for(const departmentId of [r.department_id,r.primary_department_id].filter(Boolean)){
+        if(!employee.department_ids.includes(departmentId))employee.department_ids.push(departmentId);
+      }
+    });
+    return [...byId.values()].filter(e=>e.department_ids.length).sort((a,b)=>a.full_name.localeCompare(b.full_name,'ar'));
+  }
   async function refreshCalendarTherapists(){
-    const [employeesResult,linksResult]=await Promise.all([
-      sb.from('sanad_employees').select('id,full_name,job_title,primary_department_id,is_active').eq('is_active',true).order('full_name'),
-      sb.from('sanad_employee_departments').select('employee_id,department_id')
-    ]);
-    if(employeesResult.error) throw new Error('تعذر تحميل ملفات الأطباء: '+employeesResult.error.message);
-    if(linksResult.error) throw new Error('تعذر تحميل أقسام الأطباء: '+linksResult.error.message);
-    const links=linksResult.data||[];
-    state.therapists=(employeesResult.data||[]).map(e=>({...e,department_ids:[...new Set([...links.filter(l=>l.employee_id===e.id).map(l=>l.department_id),...(e.primary_department_id?[e.primary_department_id]:[])])]})).filter(e=>e.department_ids.length);
+    const {data,error}=await sb.rpc('sanad_list_schedule_therapists');
+    if(error) throw new Error('تعذر تحميل قائمة الأطباء المسموح بها للجدولة: '+error.message);
+    state.therapists=mapScheduleTherapists(data||[]);
     return state.therapists;
   }
   async function loadDepartments(){
@@ -248,17 +254,13 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     if(error) throw new Error('تعذر تحميل الأقسام: '+error.message);
     state.departments=(data&&data.length)?data:deptFallback.map(([id,name])=>({id,name,default_duration_minutes:null,therapist_work_calculation:null}));
     if(isRole('accountant')){state.staff=[];state.therapists=[];return;}
-    const [staff,employeeRes,employeeDeptRes]=await Promise.all([
+    const [staff,therapistResult]=await Promise.all([
       sb.from('staff_profiles').select('user_id,full_name,role,is_active').eq('is_active',true).order('full_name'),
-      sb.from('sanad_employees').select('id,full_name,job_title,primary_department_id,is_active').eq('is_active',true).order('full_name'),
-      sb.from('sanad_employee_departments').select('employee_id,department_id')
+      sb.rpc('sanad_list_schedule_therapists')
     ]);
     state.staff=staff.error?[]:(staff.data||[]);
-    if(employeeRes.error||employeeDeptRes.error){state.therapists=[];console.warn('تعذر تحميل ملفات المعالجين',employeeRes.error||employeeDeptRes.error);}
-    else {
-      const links=employeeDeptRes.data||[];
-      state.therapists=(employeeRes.data||[]).map(e=>({...e,department_ids:[...new Set([...links.filter(l=>l.employee_id===e.id).map(l=>l.department_id),...(e.primary_department_id?[e.primary_department_id]:[])])]})).filter(e=>e.department_ids.length);
-    }
+    if(therapistResult.error){state.therapists=[];console.warn('تعذر تحميل قائمة الأطباء للجدولة',therapistResult.error);}
+    else state.therapists=mapScheduleTherapists(therapistResult.data||[]);
   }
   async function enterApp(user){
     state.user=user; state.profile=await getProfile(user); await loadDepartments();
