@@ -1177,7 +1177,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
   async function accountantDataPage(){
     if(!isRole('accountant')){setPage('كل الجداول','<div class="notice error">هذه الصفحة مخصصة للمحاسب للعرض فقط.</div>');return;}
     const objects=[
-      'departments','financial_closings','financial_entries','package_payments','sanad_calendar_appointments',
+      'appointments','departments','financial_closings','financial_entries','package_payments','package_session_usage','sanad_calendar_appointments',
       'patient_account_charges','patient_account_payment_allocations','patient_account_receipts','patient_department_settings',
       'patient_departments','patient_medical_records','patient_packages','patient_session_refunds','patients',
       'sanad_audit_logs','sanad_calendar_status_history','sanad_employee_departments',
