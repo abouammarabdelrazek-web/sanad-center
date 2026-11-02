@@ -269,7 +269,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     $('loginView').classList.add('hidden'); $('appView').classList.remove('hidden'); $('logoutBtn').classList.remove('hidden'); $('rolePill').classList.remove('hidden');
     $('rolePill').textContent=roleNames[state.profile.role]||state.profile.role;
     $('welcomeTitle').textContent='أهلًا، '+(state.profile.full_name||'فريق مركز سند');
-    $('welcomeSub').textContent=state.profile.role==='secretary'||state.profile.role==='receptionist'?'مساحة عمل السكرتارية — المهام اليومية فقط.':state.profile.role==='technical_manager'?'مساحة عمل المدير الفني — الأقسام المسندة فقط.':state.profile.role==='therapist'?'مساحة عمل المعالج — القسم أو الأقسام المسندة فقط.':state.profile.role==='accountant'?'مساحة عمل المحاسب — الوظائف المالية فقط.': 'لديك صلاحية إدارة المركز بالكامل.';
+    $('welcomeSub').textContent=state.profile.role==='secretary'||state.profile.role==='receptionist'?'مساحة عمل السكرتارية — المهام اليومية فقط.':state.profile.role==='technical_manager'?'مساحة عمل المدير الفني — الأقسام المسندة فقط.':state.profile.role==='therapist'?'مساحة عمل المعالج — القسم أو الأقسام المسندة فقط.':state.profile.role==='accountant'?'مساحة عمل المحاسب — مشاهدة جميع بيانات النظام والتقارير.': 'لديك صلاحية إدارة المركز بالكامل.';
     renderNav(); await showPage('overview');
   }
   function renderNav(){
@@ -1177,10 +1177,10 @@ tr.voided td{opacity:.55;text-decoration:line-through}
   async function accountantDataPage(){
     if(!isRole('accountant')){setPage('كل الجداول','<div class="notice error">هذه الصفحة مخصصة للمحاسب للعرض فقط.</div>');return;}
     const objects=[
-      'appointments','departments','financial_closings','financial_entries','package_payments','package_session_usage',
+      'departments','financial_closings','financial_entries','package_payments','sanad_calendar_appointments',
       'patient_account_charges','patient_account_payment_allocations','patient_account_receipts','patient_department_settings',
       'patient_departments','patient_medical_records','patient_packages','patient_session_refunds','patients',
-      'sanad_audit_logs','sanad_calendar_appointments','sanad_calendar_status_history','sanad_employee_departments',
+      'sanad_audit_logs','sanad_calendar_status_history','sanad_employee_departments',
       'sanad_employees','sanad_monthly_schedule_reviews','sanad_package_usage_approvals','staff_department_access',
       'staff_profiles','therapy_sessions','treasury_accounts','sanad_appointment_followup','sanad_department_patient_overview',
       'sanad_financial_daily_summary','sanad_financial_monthly_summary','sanad_management_daily_overview',
