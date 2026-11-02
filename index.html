@@ -1214,7 +1214,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
         host.innerHTML=`<div class="table-wrap"><table><thead><tr>${cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr>${cols.map(c=>`<td style="white-space:normal;max-width:320px;overflow-wrap:anywhere">${esc(cell(row[c]))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
       }
       $('accountantPageLabel').textContent=`الصفحة ${Math.floor(offset/100)+1}`;
-      $('accountantPrev').disabled=offset===0;$('accountantNext').disabled=rows.length<100;
+      $('accountantPrev').disabled=offset===0;$('accountantNext').disabled=count===null?rows.length<100:offset+rows.length>=count;
     };
     $('accountantLoad').addEventListener('click',()=>{offset=0;load();});
     $('accountantTable').addEventListener('change',()=>{offset=0;load();});
