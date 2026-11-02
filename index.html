@@ -96,6 +96,8 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     ['packages','▣','الباقات والتحصيل',['admin','secretary','receptionist']],
     ['dailyFinance','ج.م','حركة مالية اليوم',['admin','secretary','receptionist']],
     ['finances','ج.م','التقارير المالية',['admin','accountant']],
+    ['accountantData','▤','كل الجداول — عرض فقط',['accountant']],
+    ['therapistWork','◷','حساب عمل المعالجين',['admin','accountant','technical_manager']],
     ['audit','▤','سجل العمليات',['admin']],
     ['backup','⬇','النسخ الاحتياطي',['admin']],
     ['departments','▤','الأقسام',['admin','secretary','receptionist','technical_manager','therapist']],
@@ -324,6 +326,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       else if(page==='bulkSchedule') await bulkSchedulePage();
       else if(page==='packages') await packagesPage();
       else if(page==='finances') await financesPage();
+      else if(page==='accountantData') await accountantDataPage();
       else if(page==='dailyFinance') await dailyFinancePage();
       else if(page==='management') await managementPage();
       else if(page==='followup') await patientFollowupPage();
@@ -358,7 +361,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       const extra=role==='technical_manager'?shortcut('followup','متابعة المرضى','متابعة مرضى ومواعيد الأقسام المسندة إليك'):'';
       setPage(role==='technical_manager'?'مساحة عمل المدير الفني':'مساحة عمل المعالج',`<p class="muted" style="margin-top:0">أهلًا ${esc(state.profile.full_name||'بك')}. تظهر هنا الأقسام المسندة لحسابك فقط.</p><div class="dept-grid">${deptHtml}${extra}</div>`);
     }else if(role==='accountant'){
-      setPage('مساحة عمل المحاسب',`<p class="muted">يمكنك الوصول إلى التقارير والحركات المالية وفق صلاحيات حسابك. لا تظهر هنا ملفات المرضى أو الجداول الطبية.</p><div class="dept-grid">${shortcut('finances','الإيرادات والمصروفات','التقارير والتحليلات المالية')}</div>`);
+      setPage('مساحة عمل المحاسب',`<p class="muted">لديك صلاحية مشاهدة جميع جداول وبيانات النظام، مع بقاء صلاحيات التعديل محكومة بسياسات قاعدة البيانات.</p><div class="dept-grid">${shortcut('finances','الإيرادات والمصروفات','التقارير والتحليلات المالية')}${shortcut('accountantData','كل جداول النظام','استعراض جميع الجداول والـ Views دون تعديل')}${shortcut('therapistWork','حساب عمل المعالجين','الجلسات المكتملة والملغاة وعدم الحضور')}</div>`);
     }else{
       const depts=allowedDepartments();
       const deptHtml=`<div class="dept-grid">${depts.map(d=>`<button class="dept dept-open" data-department="${esc(d.id)}" type="button" style="text-align:right;cursor:pointer;color:inherit"><h4>${esc(d.name)}</h4><p>اضغط لعرض مرضى القسم وجدوله</p></button>`).join('')}</div>`;
@@ -1171,8 +1174,56 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       setTimeout(appointmentsPage,900);
     });
   }
+  async function accountantDataPage(){
+    if(!isRole('accountant')){setPage('كل الجداول','<div class="notice error">هذه الصفحة مخصصة للمحاسب للعرض فقط.</div>');return;}
+    const objects=[
+      'appointments','departments','financial_closings','financial_entries','package_payments','package_session_usage',
+      'patient_account_charges','patient_account_payment_allocations','patient_account_receipts','patient_department_settings',
+      'patient_departments','patient_medical_records','patient_packages','patient_session_refunds','patients',
+      'sanad_audit_logs','sanad_calendar_appointments','sanad_calendar_status_history','sanad_employee_departments',
+      'sanad_employees','sanad_monthly_schedule_reviews','sanad_package_usage_approvals','staff_department_access',
+      'staff_profiles','therapy_sessions','treasury_accounts','sanad_appointment_followup','sanad_department_patient_overview',
+      'sanad_financial_daily_summary','sanad_financial_monthly_summary','sanad_management_daily_overview',
+      'sanad_management_monthly_overview','sanad_management_package_overview','sanad_package_summary',
+      'sanad_patient_account_receipts','sanad_patient_account_statement','sanad_patient_account_summary',
+      'sanad_patient_followup','sanad_therapist_work_summary','sanad_treasury_balances'
+    ];
+    let selected=objects[0],offset=0;
+    setPage('كل الجداول — عرض فقط',`<p class="muted">استعراض مباشر لبيانات جداول وواجهات العرض الموجودة في مخطط public. هذه الصفحة لا تحتوي على أوامر إضافة أو تعديل أو حذف. صلاحيات قاعدة البيانات هي المرجع النهائي.</p>
+      <div class="toolbar" style="margin:12px 0">
+        <label for="accountantTable">الجدول / التقرير</label>
+        <select id="accountantTable">${objects.map(x=>`<option value="${x}">${x}</option>`).join('')}</select>
+        <button class="btn secondary" id="accountantLoad" type="button">عرض البيانات</button>
+      </div>
+      <div id="accountantTableMeta" class="muted small"></div><div id="accountantTableResults"><div class="empty">اختر جدولًا لعرض بياناته.</div></div>
+      <div class="toolbar" style="justify-content:center;margin-top:12px">
+        <button class="btn ghost" id="accountantPrev" type="button" disabled>السابق</button>
+        <span id="accountantPageLabel" class="muted small">الصفحة 1</span>
+        <button class="btn ghost" id="accountantNext" type="button" disabled>التالي</button>
+      </div>`);
+    const load=async()=>{
+      selected=$('accountantTable').value;const host=$('accountantTableResults'),meta=$('accountantTableMeta');
+      host.innerHTML='<div class="empty">جارٍ تحميل البيانات…</div>';
+      const {data,error,count}=await sb.from(selected).select('*',{count:'exact'}).range(offset,offset+99);
+      if(error){host.innerHTML=`<div class="notice error">تعذر عرض ${esc(selected)}: ${esc(error.message)}</div>`;meta.textContent='';$('accountantPrev').disabled=offset===0;$('accountantNext').disabled=true;return;}
+      const rows=data||[],cols=rows.length?Object.keys(rows[0]):[];
+      meta.textContent=`المصدر: ${selected} — السجلات المعروضة ${rows.length} من ${count??'غير محدد'}`;
+      if(!rows.length){host.innerHTML='<div class="empty">لا توجد سجلات في هذا الجدول أو التقرير.</div>';}
+      else{
+        const cell=v=>{if(v===null||v===undefined)return '—';if(typeof v==='object')return JSON.stringify(v);return String(v);};
+        host.innerHTML=`<div class="table-wrap"><table><thead><tr>${cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr>${cols.map(c=>`<td style="white-space:normal;max-width:320px;overflow-wrap:anywhere">${esc(cell(row[c]))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+      }
+      $('accountantPageLabel').textContent=`الصفحة ${Math.floor(offset/100)+1}`;
+      $('accountantPrev').disabled=offset===0;$('accountantNext').disabled=rows.length<100;
+    };
+    $('accountantLoad').addEventListener('click',()=>{offset=0;load();});
+    $('accountantTable').addEventListener('change',()=>{offset=0;load();});
+    $('accountantPrev').addEventListener('click',()=>{offset=Math.max(0,offset-100);load();});
+    $('accountantNext').addEventListener('click',()=>{offset+=100;load();});
+    await load();
+  }
   async function therapistWorkPage(){
-    if(!isRole('admin','technical_manager')){setPage('حساب عمل المعالجين','<div class="notice error">هذا التقرير متاح للمدير الإداري ومدير القسم فقط.</div>');return;}
+    if(!isRole('admin','technical_manager','accountant')){setPage('حساب عمل المعالجين','<div class="notice error">هذا التقرير متاح للمدير الإداري والمحاسب ومدير القسم.</div>');return;}
     const today=new Date();const monthValue=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
     setPage('حساب عمل المعالجين','<div class="empty">جارٍ تحميل حساب العمل…</div>');
     const fields='period_type,period_start,therapist_id,department_id,therapist_work_calculation,completed_sessions,work_minutes,work_session_count,cancelled_sessions,cancelled_work_minutes,cancelled_work_session_count,no_show_sessions,no_show_work_minutes,no_show_work_session_count,actual_work_minutes,actual_cancelled_minutes,actual_no_show_minutes,therapist_name,therapist_is_active';
@@ -1190,11 +1241,11 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       const totalSessions=sum('completed_sessions'),minutes=sum('work_minutes'),count=sum('work_session_count'),actualMinutes=sum('actual_work_minutes'),actualCancelledMinutes=sum('actual_cancelled_minutes'),actualNoShowMinutes=sum('actual_no_show_minutes');
       const cancelled=sum('cancelled_sessions'),cancelledMinutes=sum('cancelled_work_minutes'),cancelledCount=sum('cancelled_work_session_count');
       const noShow=sum('no_show_sessions'),noShowMinutes=sum('no_show_work_minutes'),noShowCount=sum('no_show_work_session_count');
-      const body=filtered.length?`<div class="table-wrap"><table><thead><tr>${period==='daily'?'<th>اليوم</th>':''}<th>المعالج</th><th>القسم</th><th>الجلسات المكتملة</th><th>حساب العمل حسب القسم</th><th>دقائق العمل الفعلية</th><th>المواعيد الملغاة</th><th>حساب الملغي</th><th>دقائق الملغي</th><th>عدم الحضور</th><th>حساب عدم الحضور</th><th>دقائق عدم الحضور</th></tr></thead><tbody>${filtered.map(x=>{return `<tr>${period==='daily'?`<td>${esc(x.period_start)}</td>`:''}<td>${esc(x.therapist_name||staffName(x.therapist_id))}${x.therapist_is_active===false?' <span class="badge">غير نشط (سجل تاريخي)</span>':''}</td><td>${esc(deptName(x.department_id))}</td><td>${Number(x.completed_sessions||0)}</td><td><strong>${workValue(x,'work_minutes','work_session_count')}</strong></td><td>${Number(x.actual_work_minutes||0)} دقيقة</td><td>${Number(x.cancelled_sessions||0)}</td><td>${workValue(x,'cancelled_work_minutes','cancelled_work_session_count')}</td><td>${Number(x.actual_cancelled_minutes||0)} دقيقة</td><td>${Number(x.no_show_sessions||0)}</td><td>${workValue(x,'no_show_work_minutes','no_show_work_session_count')}</td><td>${Number(x.actual_no_show_minutes||0)} دقيقة</td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty">لا توجد مواعيد مسجلة لهذا الشهر والاختيارات.</div>';
-      $('workResults').innerHTML=`<div class="stats">${stat('الجلسات المكتملة',totalSessions,'المواعيد المكتملة فقط')}${stat('ساعات العمل الفعلية',(actualMinutes/60).toFixed(2)+' ساعة',actualMinutes+' دقيقة في كل الأقسام')}${stat('العمل حسب نظام المدة',(minutes/60).toFixed(2)+' ساعة','حساب القسم المعتمد على المدة')}${stat('عمل مكتمل بنظام العدد',count,'جلسة لكل موعد مكتمل')}${stat('المواعيد الملغاة',cancelled,'إحصائية منفصلة')}${stat('عمل المواعيد الملغاة',minutesLabel(cancelledMinutes,cancelledCount,filtered),'حسب نظام القسم')}${stat('دقائق الإلغاء الفعلية',actualCancelledMinutes+' دقيقة','منفصلة ولا تدخل في العمل الفعلي')}${stat('عدم الحضور',noShow,'إحصائية منفصلة')}${stat('عمل عدم الحضور',minutesLabel(noShowMinutes,noShowCount,filtered),'حسب نظام القسم')}${stat('دقائق عدم الحضور',actualNoShowMinutes+' دقيقة','منفصلة ولا تدخل في العمل الفعلي')}</div>${body}`;
+      const body=filtered.length?`<div class="table-wrap"><table><thead><tr>${period==='daily'?'<th>اليوم</th>':''}<th>المعالج</th><th>القسم</th><th>الجلسات المكتملة</th><th>حساب العمل حسب القسم</th><th>مدة الجلسات المكتملة حسب مدة الموعد</th><th>المواعيد الملغاة</th><th>حساب الملغي</th><th>دقائق الملغي</th><th>عدم الحضور</th><th>حساب عدم الحضور</th><th>دقائق عدم الحضور</th></tr></thead><tbody>${filtered.map(x=>{return `<tr>${period==='daily'?`<td>${esc(x.period_start)}</td>`:''}<td>${esc(x.therapist_name||staffName(x.therapist_id))}${x.therapist_is_active===false?' <span class="badge">غير نشط (سجل تاريخي)</span>':''}</td><td>${esc(deptName(x.department_id))}</td><td>${Number(x.completed_sessions||0)}</td><td><strong>${workValue(x,'work_minutes','work_session_count')}</strong></td><td>${Number(x.actual_work_minutes||0)} دقيقة</td><td>${Number(x.cancelled_sessions||0)}</td><td>${workValue(x,'cancelled_work_minutes','cancelled_work_session_count')}</td><td>${Number(x.actual_cancelled_minutes||0)} دقيقة</td><td>${Number(x.no_show_sessions||0)}</td><td>${workValue(x,'no_show_work_minutes','no_show_work_session_count')}</td><td>${Number(x.actual_no_show_minutes||0)} دقيقة</td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty">لا توجد مواعيد مسجلة لهذا الشهر والاختيارات.</div>';
+      $('workResults').innerHTML=`<div class="stats">${stat('الجلسات المكتملة',totalSessions,'المواعيد المكتملة فقط')}${stat('مدة الجلسات المكتملة حسب مدة الموعد',(actualMinutes/60).toFixed(2)+' ساعة',actualMinutes+' دقيقة محسوبة من مدد المواعيد')}${stat('العمل حسب نظام المدة',(minutes/60).toFixed(2)+' ساعة','حساب القسم المعتمد على المدة')}${stat('عمل مكتمل بنظام العدد',count,'جلسة لكل موعد مكتمل')}${stat('المواعيد الملغاة',cancelled,'إحصائية منفصلة')}${stat('عمل المواعيد الملغاة',minutesLabel(cancelledMinutes,cancelledCount,filtered),'حسب نظام القسم')}${stat('دقائق الإلغاء الفعلية',actualCancelledMinutes+' دقيقة','منفصلة ولا تدخل في العمل الفعلي')}${stat('عدم الحضور',noShow,'إحصائية منفصلة')}${stat('عمل عدم الحضور',minutesLabel(noShowMinutes,noShowCount,filtered),'حسب نظام القسم')}${stat('دقائق عدم الحضور',actualNoShowMinutes+' دقيقة','منفصلة ولا تدخل في العمل الفعلي')}</div>${body}`;
     };
     function minutesLabel(mins,sessions,items){const hasDuration=items.some(x=>x.therapist_work_calculation==='duration');const hasCount=items.some(x=>x.therapist_work_calculation==='session_count');if(hasDuration&&hasCount)return `${(mins/60).toFixed(2)} ساعة + ${sessions} جلسة`;if(hasDuration)return `${(mins/60).toFixed(2)} ساعة`;return `${sessions} جلسة`;}
-    setPage('حساب عمل المعالجين',`<p class="muted">كل موعد علاجي مكتمل يُحسب جلسة واحدة في أقسام نظام العدد. ويظهر وقت العمل الفعلي بالدقائق في كل الأقسام كمؤشر مستقل. الملغي وعدم الحضور منفصلان عن المكتمل، ولا يدخلان في دقائق العمل الفعلية.</p><div class="schedule-filters"><select id="workPeriod"><option value="monthly">التقرير الشهري</option><option value="daily">التقرير اليومي</option></select><select id="workMonth">${monthOptions.map(m=>`<option value="${m}" ${m===selectedMonth?'selected':''}>${m}</option>`).join('')||`<option value="${monthValue}">${monthValue}</option>`}</select><select id="workDay"><option value="all">كل أيام الشهر</option>${[...new Set(rows.filter(x=>x.period_type==='daily'&&String(x.period_start).slice(0,7)===selectedMonth).map(x=>String(x.period_start)))].sort().map(d=>`<option value="${d}">${d}</option>`).join('')}</select><select id="workDepartment"><option value="all">كل الأقسام المسموح بها</option>${allowedDepartments().map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select><select id="workTherapist"><option value="all">كل المعالجين</option>${therapists.map(t=>`<option value="${esc(t.id)}">${esc(t.name)}${t.active===false?' — غير نشط (تاريخي)':''}</option>`).join('')}</select></div><div id="workResults"></div>`);
+    setPage('حساب عمل المعالجين',`<p class="muted">كل موعد علاجي مكتمل يُحسب جلسة واحدة في أقسام نظام العدد. ويظهر مدة الجلسات المكتملة محسوبة من مدة الموعد المسجلة، وليست قياسًا لحضور المعالج الفعلي. الملغي وعدم الحضور منفصلان عن المكتمل، ولا يدخلان في دقائق العمل الفعلية.</p><div class="schedule-filters"><select id="workPeriod"><option value="monthly">التقرير الشهري</option><option value="daily">التقرير اليومي</option></select><select id="workMonth">${monthOptions.map(m=>`<option value="${m}" ${m===selectedMonth?'selected':''}>${m}</option>`).join('')||`<option value="${monthValue}">${monthValue}</option>`}</select><select id="workDay"><option value="all">كل أيام الشهر</option>${[...new Set(rows.filter(x=>x.period_type==='daily'&&String(x.period_start).slice(0,7)===selectedMonth).map(x=>String(x.period_start)))].sort().map(d=>`<option value="${d}">${d}</option>`).join('')}</select><select id="workDepartment"><option value="all">كل الأقسام المسموح بها</option>${allowedDepartments().map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select><select id="workTherapist"><option value="all">كل المعالجين</option>${therapists.map(t=>`<option value="${esc(t.id)}">${esc(t.name)}${t.active===false?' — غير نشط (تاريخي)':''}</option>`).join('')}</select></div><div id="workResults"></div>`);
     $('workMonth').addEventListener('change',()=>{const m=$('workMonth').value;const days=[...new Set(rows.filter(x=>x.period_type==='daily'&&String(x.period_start).slice(0,7)===m).map(x=>String(x.period_start)))].sort();$('workDay').innerHTML='<option value="all">كل أيام الشهر</option>'+days.map(d=>`<option value="${d}">${d}</option>`).join('');render();});
     ['workPeriod','workDay','workDepartment','workTherapist'].forEach(id=>$(id).addEventListener('change',render));render();
   }
