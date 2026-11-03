@@ -1176,23 +1176,21 @@ tr.voided td{opacity:.55;text-decoration:line-through}
   }
   async function accountantDataPage(){
     if(!isRole('accountant')){setPage('كل الجداول','<div class="notice error">هذه الصفحة مخصصة للمحاسب للعرض فقط.</div>');return;}
-    const objects=[
-      'appointments','departments','financial_closings','financial_entries','package_payments','package_session_usage','sanad_calendar_appointments',
-      'patient_account_charges','patient_account_payment_allocations','patient_account_receipts','patient_department_settings',
-      'patient_departments','patient_medical_records','patient_packages','patient_session_refunds','patients',
-      'sanad_audit_logs','sanad_calendar_status_history','sanad_employee_departments',
-      'sanad_employees','sanad_monthly_schedule_reviews','sanad_package_usage_approvals','staff_department_access',
-      'staff_profiles','therapy_sessions','treasury_accounts','sanad_appointment_followup','sanad_department_patient_overview',
-      'sanad_financial_daily_summary','sanad_financial_monthly_summary','sanad_management_daily_overview',
-      'sanad_management_monthly_overview','sanad_management_package_overview','sanad_package_summary',
-      'sanad_patient_account_receipts','sanad_patient_account_statement','sanad_patient_account_summary',
-      'sanad_patient_followup','sanad_therapist_work_summary','sanad_treasury_balances'
+    const groups=[
+      {label:'المرضى والملفات الطبية',items:['patients','patient_medical_records','patient_departments','patient_department_settings']},
+      {label:'المواعيد والجلسات',items:['appointments','therapy_sessions','sanad_calendar_appointments','sanad_calendar_status_history']},
+      {label:'الباقات وحسابات المرضى',items:['patient_packages','package_session_usage','package_payments','sanad_package_usage_approvals','patient_account_charges','patient_account_receipts','patient_account_payment_allocations','patient_session_refunds']},
+      {label:'الإيرادات والمصروفات والخزينة',items:['financial_entries','financial_closings','treasury_accounts']},
+      {label:'الموظفون والأقسام والصلاحيات',items:['departments','sanad_employees','sanad_employee_departments','staff_profiles','staff_department_access','sanad_monthly_schedule_reviews']},
+      {label:'التقارير والملخصات',items:['sanad_appointment_followup','sanad_department_patient_overview','sanad_financial_daily_summary','sanad_financial_monthly_summary','sanad_management_daily_overview','sanad_management_monthly_overview','sanad_management_package_overview','sanad_package_summary','sanad_patient_account_receipts','sanad_patient_account_statement','sanad_patient_account_summary','sanad_patient_followup','sanad_therapist_work_summary','sanad_treasury_balances']},
+      {label:'الرقابة وسجل العمليات',items:['sanad_audit_logs']}
     ];
+    const objects=groups.flatMap(g=>g.items);
     let selected=objects[0],offset=0;
     setPage('كل الجداول — عرض فقط',`<p class="muted">استعراض مباشر لبيانات جداول وواجهات العرض الموجودة في مخطط public. هذه الصفحة لا تحتوي على أوامر إضافة أو تعديل أو حذف. صلاحيات قاعدة البيانات هي المرجع النهائي.</p>
       <div class="toolbar" style="margin:12px 0">
         <label for="accountantTable">الجدول / التقرير</label>
-        <select id="accountantTable">${objects.map(x=>`<option value="${x}">${x}</option>`).join('')}</select>
+        <select id="accountantTable">${groups.map(g=>`<optgroup label="${g.label}">${g.items.map(x=>`<option value="${x}">${x}</option>`).join('')}</optgroup>`).join('')}</select>
         <button class="btn secondary" id="accountantLoad" type="button">عرض البيانات</button>
       </div>
       <div id="accountantTableMeta" class="muted small"></div><div id="accountantTableResults"><div class="empty">اختر جدولًا لعرض بياناته.</div></div>
