@@ -1137,21 +1137,33 @@ tr.voided td{opacity:.55;text-decoration:line-through}
   }
   async function completeAssessment(id){
     if(!isRole('admin','secretary','receptionist'))return;
-    const {data:appt,error:loadError}=await sb.from('sanad_calendar_appointments').select('status,appointment_type').eq('id',id).maybeSingle();
+    const {data:appt,error:loadError}=await sb.from('sanad_calendar_appointments').select('status,appointment_type,package_id,assessment_price,patients(full_name)').eq('id',id).maybeSingle();
     if(loadError||!appt){alert('تعذر التحقق من الموعد قبل إتمام الكشف.');return;}
     if(appt.status!=='scheduled'||appt.appointment_type!=='assessment'){alert('لا يمكن إتمام الكشف إلا إذا كان الموعد كشفًا وحالته «مجدول».');return;}
-    if(!confirm('تأكيد إتمام الكشف؟ لن يتم خصم أي جلسة من الباقة ولن يتم تسجيل إيراد جلسة علاجية.'))return;
-    const {error}=await callCompleteAppointment(id,0,null,null);
-    if(error){alert('تعذر إتمام الكشف: '+error.message);return;}
-    await appointmentsPage();
+    if(appt.package_id){if(!confirm('هذا كشف قديم مرتبط بباقة. سيتم الاحتفاظ بسلوكه التاريخي دون تحصيل مستقل. هل تريد إتمامه؟'))return;const oldResult=await callCompleteAppointment(id,0,null,null,null);if(oldResult.error){alert('تعذر إتمام الكشف: '+oldResult.error.message);return;}await appointmentsPage();return;}
+    const price=Number(appt.assessment_price||0);
+    if(!Number.isFinite(price)||price<=0){alert('سعر الكشف المستقل غير مسجل. افتح تعديل الموعد وسجل السعر أولًا.');return;}
+    const html='<form id="completeAssessmentForm"><p>المريض: <strong>'+esc(appt.patients?.full_name||'—')+'</strong></p><div class="notice">الكشف خدمة مستقلة. السعر المحفوظ: <strong>'+money(price)+'</strong>. سيتم تسجيل استحقاق الكشف مستقلًا عن أي باقة.</div><div class="field"><label>المبلغ المحصل الآن (ج.م)</label><input name="collected_amount" type="number" min="0" max="'+price+'" step="0.01" value="'+price+'" required></div><div class="field"><label>طريقة التحصيل</label><select name="payment_method"><option value="cash">نقدي</option><option value="card">بطاقة</option><option value="transfer">تحويل</option><option value="other">أخرى</option><option value="">لم يتم التحصيل الآن</option></select></div><div class="toolbar"><button class="btn" type="submit">تأكيد إتمام الكشف</button><button class="btn ghost" id="cancelAssessment" type="button">رجوع</button></div><div id="assessmentMessage"></div></form>';
+    setPage('إتمام الكشف',html);
+    $('cancelAssessment').addEventListener('click',appointmentsPage);
+    $('completeAssessmentForm').addEventListener('submit',async e=>{
+      e.preventDefault();const f=new FormData(e.currentTarget),amount=Number(f.get('collected_amount')),method=String(f.get('payment_method')||'')||null;
+      if(!Number.isFinite(amount)||amount<0||amount>price){msg($('assessmentMessage'),'المبلغ يجب أن يكون بين صفر وسعر الكشف.');return;}
+      if(amount>0&&!method){msg($('assessmentMessage'),'اختر طريقة التحصيل للمبلغ المدفوع.');return;}
+      if(amount===0&&method){msg($('assessmentMessage'),'اترك طريقة التحصيل فارغة إذا لم يتم دفع مبلغ.');return;}
+      const btn=e.currentTarget.querySelector('button[type=submit]');btn.disabled=true;
+      const result=await callCompleteAppointment(id,amount,method,null,price);btn.disabled=false;
+      if(result.error){msg($('assessmentMessage'),'تعذر إتمام الكشف: '+result.error.message);return;}
+      msg($('assessmentMessage'),'تم إتمام الكشف وتسجيل استحقاقه بشكل مستقل.','success');setTimeout(appointmentsPage,800);
+    });
   }
-  async function callCompleteAppointment(id,amount,method,price){
-    // إتمام الجلسة عملية مالية/علاجية ذرية؛ لا نستخدم توقيعًا قديمًا ولا نحدّث حقول الموعد مباشرة.
+  async function callCompleteAppointment(id,amount,method,price,assessmentPrice=null){
     return await sb.rpc('sanad_calendar_complete_appointment',{
       p_appointment_id:id,
       p_collected_amount:amount,
       p_payment_method:method,
-      p_session_price:price
+      p_session_price:price,
+      p_assessment_price:assessmentPrice
     });
   }
   async function markAppointmentNoShow(id){
