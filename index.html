@@ -1085,7 +1085,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
           const updateResult=await sb.from('sanad_calendar_appointments').update(payload).eq('id',editId);
           if(updateResult.error)throw new Error('فشل تحديث الموعد: '+updateResult.error.message);
           const verifyResult=await sb.from('sanad_calendar_appointments')
-            .select('id,patient_id,department_id,therapist_id,appointment_at,appointment_end_at,duration_minutes,status,notes,appointment_type,package_id,session_price')
+            .select('id,patient_id,department_id,therapist_id,appointment_at,appointment_end_at,duration_minutes,status,notes,appointment_type,package_id,session_price,assessment_price')
             .eq('id',editId).maybeSingle();
           if(verifyResult.error)throw new Error('تم إرسال التعديل لكن تعذر التحقق منه: '+verifyResult.error.message);
           const saved=verifyResult.data;
