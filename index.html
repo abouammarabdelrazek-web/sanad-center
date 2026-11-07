@@ -1053,7 +1053,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
           appointment_type:type,
           package_id:packageId||null,
           // سعر الجلسة الفردية يُحفظ وقت الحجز؛ مواعيد الباقات والكشف لا تحمل سعر جلسة فردية.
-          session_price:existing?.status==='completed'?(existing.session_price??null):sessionPrice,
+          session_price:existing?(existing.session_price??sessionPrice):sessionPrice,
           assessment_price:existing?.status==='completed'?(existing.assessment_price??null):assessmentPrice
         };
         if(!['cancelled','no_show'].includes(payload.status)){
