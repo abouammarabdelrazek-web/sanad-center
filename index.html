@@ -750,7 +750,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       const start=new Date(a.appointment_at);
       const end=a.appointment_end_at?new Date(a.appointment_end_at):new Date(start.getTime()+Number(a.duration_minutes||45)*60000);
       const isAssess=a.appointment_type==='assessment';
-      const open=!['completed','cancelled','no_show'].includes(a.status);
+      const open=a.status==='scheduled'; // قاعدة البيانات تسمح بالإتمام من scheduled فقط؛ confirmed للعرض/التعديل دون زر إتمام.
       let actions='';
       if(editable){
         if(open)actions+=isAssess?`<button class="btn secondary" data-act="assess" data-id="${esc(a.id)}" type="button">تأكيد إتمام الكشف</button>`:`<button class="btn secondary" data-act="complete" data-id="${esc(a.id)}" type="button">إتمام الجلسة</button>`;
@@ -1096,6 +1096,9 @@ tr.voided td{opacity:.55;text-decoration:line-through}
   }
   async function completeAssessment(id){
     if(!isRole('admin','secretary','receptionist'))return;
+    const {data:appt,error:loadError}=await sb.from('sanad_calendar_appointments').select('status,appointment_type').eq('id',id).maybeSingle();
+    if(loadError||!appt){alert('تعذر التحقق من الموعد قبل إتمام الكشف.');return;}
+    if(appt.status!=='scheduled'||appt.appointment_type!=='assessment'){alert('لا يمكن إتمام الكشف إلا إذا كان الموعد كشفًا وحالته «مجدول».');return;}
     if(!confirm('تأكيد إتمام الكشف؟ لن يتم خصم أي جلسة من الباقة ولن يتم تسجيل إيراد جلسة علاجية.'))return;
     const {error}=await callCompleteAppointment(id,0,null,null);
     if(error){alert('تعذر إتمام الكشف: '+error.message);return;}
@@ -1121,8 +1124,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     if(!isRole('admin','secretary','receptionist'))return;
     const {data:appt,error}=await sb.from('sanad_calendar_appointments').select('id,patient_id,department_id,appointment_at,duration_minutes,status,appointment_type,package_id,session_price,patients(full_name)').eq('id',id).maybeSingle();
     if(error||!appt){alert('تعذر تحميل الموعد: '+(error?.message||'غير موجود'));return;}
-    if(appt.status==='completed'){alert('الجلسة مسجلة كمكتملة بالفعل.');return;}
-    if(appt.status==='cancelled'||appt.status==='no_show'){alert('لا يمكن إتمام موعد ملغي أو لم يأخذ المريض جلسته.');return;}
+    if(appt.status!=='scheduled'){alert(appt.status==='completed'?'الجلسة مسجلة كمكتملة بالفعل.':'لا يمكن إتمام هذا الموعد؛ يجب أن تكون حالته «مجدول».');return;}
     if(appt.appointment_type==='assessment'){alert('هذا موعد كشف وليس جلسة علاجية.');return;}
     const isPackage=!!appt.package_id;
     const price=Number(appt.session_price??0);
