@@ -94,6 +94,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     ['bulkSchedule','▤','توزيع جدول دكتور',['admin','secretary','receptionist']],
     ['followup','◎','متابعة المرضى',['admin','secretary','receptionist','technical_manager']],
     ['packages','▣','الباقات والتحصيل',['admin','secretary','receptionist']],
+    ['debts','ج.م','تحصيل المديونيات',['admin','secretary','accountant']],
     ['dailyFinance','ج.م','حركة مالية اليوم',['admin','secretary','receptionist']],
     ['finances','ج.م','التقارير المالية',['admin','accountant']],
     ['accountantData','▤','كل الجداول — عرض فقط',['accountant']],
@@ -325,6 +326,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       else if(page==='appointments') await appointmentsPage();
       else if(page==='bulkSchedule') await bulkSchedulePage();
       else if(page==='packages') await packagesPage();
+      else if(page==='debts') await patientDebtsPage();
       else if(page==='finances') await financesPage();
       else if(page==='accountantData') await accountantDataPage();
       else if(page==='dailyFinance') await dailyFinancePage();
@@ -552,9 +554,9 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     if(after)await after();
   }
   async function patientFilePage(patientId){
-    if(!isRole('admin','secretary','receptionist','technical_manager')){setPage('ملف المريض','<div class="notice error">غير مصرح لك بفتح ملفات المرضى.</div>');return;}
-    const backTo=state.page==='departments'?'departments':'patients';
-    const showMoney=isRole('admin','secretary');
+    if(!isRole('admin','secretary','receptionist','technical_manager','accountant')){setPage('ملف المريض','<div class="notice error">غير مصرح لك بفتح ملفات المرضى.</div>');return;}
+    const backTo=state.page==='debts'?'debts':(state.page==='departments'?'departments':'patients');
+    const showMoney=isRole('admin','secretary','accountant');
     const actions=`<button class="btn secondary" id="backFromPatientFile" type="button">رجوع</button>${isRole('admin','secretary')?'<button class="btn" id="editFromPatientFile" type="button">تعديل الملف</button>':''}`;
     const wire=()=>{$('backFromPatientFile')?.addEventListener('click',()=>showPage(backTo));$('editFromPatientFile')?.addEventListener('click',()=>patientForm(null,patientId));};
     setPage('ملف المريض','<div class="empty">جارٍ تحميل ملف المريض…</div>',actions);wire();
@@ -1550,6 +1552,96 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     $('exportManagementCsv')?.addEventListener('click',()=>{
       const rows=[['تقرير إدارة مركز سند',''],['تاريخ التقرير اليومي',reportDate],['شهر التقرير',month],[],['نشاط اليوم حسب القسم'],['القسم','مرضى جدد','المواعيد','مكتملة','ملغاة','لم يحضر','الإيرادات','المصروفات','الصافي'],...daily.map(x=>[x.department_name||deptName(x.department_id),x.new_patients,x.total_appointments,x.completed_appointments,x.cancelled_appointments,x.no_show_appointments,x.total_income,x.total_expenses,x.net_result]),[],['نشاط الشهر حسب القسم'],['القسم','مرضى جدد','المواعيد','مكتملة','ملغاة','لم يحضر','الإيرادات','المصروفات','الصافي'],...monthly.map(x=>[x.department_name||deptName(x.department_id),x.new_patients,x.total_appointments,x.completed_appointments,x.cancelled_appointments,x.no_show_appointments,x.total_income,x.total_expenses,x.net_result]),[],['المرضى النشطون حسب القسم'],['القسم','عدد المرضى النشطين'],...patients.map(x=>[x.department_name,x.active_patients]),[],['ملخص الباقات حسب القسم'],['القسم','عدد الباقات','المدفوع','المتبقي المالي','الجلسات المتبقية'],...Object.values(pkgByDept).map(x=>[x.name,x.count,x.paid,x.remaining,x.sessions])];
       downloadCsv(`sanad-management-report-${reportDate}-${month}.csv`,rows);
+    });
+  }
+
+  async function patientDebtsPage(){
+    if(!isRole('admin','secretary','accountant')){
+      setPage('تحصيل المديونيات','<div class="notice error">هذه الصفحة متاحة للمدير والسكرتارية والمحاسب فقط.</div>');return;
+    }
+    setPage('تحصيل المديونيات','<div class="empty">جارٍ تحميل أرصدة المرضى…</div>');
+    const summaryRes=await sb.from('sanad_patient_account_summary').select('patient_id,charge_count,total_charges,total_paid,outstanding_balance').gt('outstanding_balance',0).order('outstanding_balance',{ascending:false}).limit(2000);
+    if(summaryRes.error){
+      setPage('تحصيل المديونيات','<div class="notice error">تعذر تحميل المديونيات: '+esc(summaryRes.error.message)+'</div>');return;
+    }
+    const balances=summaryRes.data||[];
+    if(!balances.length){
+      setPage('تحصيل المديونيات','<div class="empty">لا توجد مديونيات مستحقة على المرضى حاليًا.</div>');return;
+    }
+    const ids=balances.map(x=>x.patient_id);
+    const [patientsRes,statementRes,receiptsRes]=await Promise.all([
+      sb.from('patients').select('id,file_number,full_name,phone').in('id',ids),
+      sb.from('sanad_patient_account_statement').select('patient_id,charge_date,session_date,voided_at').in('patient_id',ids),
+      sb.from('patient_account_receipts').select('id,patient_id,payment_date').in('patient_id',ids).order('payment_date',{ascending:false})
+    ]);
+    if(patientsRes.error||statementRes.error||receiptsRes.error){
+      const e=patientsRes.error||statementRes.error||receiptsRes.error;
+      setPage('تحصيل المديونيات','<div class="notice error">تعذر استكمال بيانات المديونيات: '+esc(e.message)+'</div>');return;
+    }
+    const receipts=receiptsRes.data||[];
+    const receiptIds=receipts.map(x=>x.id);
+    let allocations=[];
+    if(receiptIds.length){
+      const ar=await sb.from('patient_account_payment_allocations').select('receipt_id,voided_at').in('receipt_id',receiptIds);
+      if(ar.error){setPage('تحصيل المديونيات','<div class="notice error">تعذر قراءة حركات التحصيل: '+esc(ar.error.message)+'</div>');return;}
+      allocations=ar.data||[];
+    }
+    const activeReceiptIds=new Set(allocations.filter(x=>!x.voided_at).map(x=>x.receipt_id));
+    const latestByPatient={};
+    (statementRes.data||[]).forEach(x=>{
+      if(x.voided_at)return;
+      const d=x.session_date||x.charge_date;
+      if(d&&(!latestByPatient[x.patient_id]||new Date(d)>new Date(latestByPatient[x.patient_id])))latestByPatient[x.patient_id]=d;
+    });
+    receipts.forEach(x=>{
+      if(!activeReceiptIds.has(x.id))return;
+      const d=x.payment_date;
+      if(d&&(!latestByPatient[x.patient_id]||new Date(d)>new Date(latestByPatient[x.patient_id])))latestByPatient[x.patient_id]=d;
+    });
+    const patientById=Object.fromEntries((patientsRes.data||[]).map(x=>[x.id,x]));
+    const total=balances.reduce((n,x)=>n+Number(x.outstanding_balance||0),0);
+    const canCollect=isRole('admin','secretary');
+    const rows=balances.map(x=>{
+      const p=patientById[x.patient_id]||{};
+      return '<tr><td>'+esc(p.full_name||'—')+'</td><td>'+esc(p.file_number??'—')+'</td><td>'+money(x.outstanding_balance)+'</td><td>'+dateTime(latestByPatient[x.patient_id])+'</td><td><div class="toolbar"><button class="btn secondary" type="button" data-open-debt-patient="'+esc(x.patient_id)+'">فتح كشف الحساب</button>'+(canCollect?'<button class="btn" type="button" data-collect-debt="'+esc(x.patient_id)+'" data-patient-name="'+esc(p.full_name||'المريض')+'" data-balance="'+Number(x.outstanding_balance)+'">تسجيل سداد مديونية</button>':'')+'</div></td></tr>';
+    }).join('');
+    const body='<div class="stats">'+stat('عدد المرضى المدينين',balances.length,'أرصدة غير مسددة')+stat('إجمالي المديونيات',money(total),'بعد استبعاد الحركات الملغاة')+'</div><p class="muted small">يعرض هذا القسم المديونيات الناتجة عن الجلسات الفردية فقط، ويُحدّث الرصيد تلقائيًا بعد إتمام الجلسات وتسجيل التحصيل أو عكسه.</p><div class="table-wrap"><table><thead><tr><th>اسم المريض</th><th>رقم الملف</th><th>إجمالي المديونية</th><th>آخر جلسة أو تحصيل</th><th>الإجراءات</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    setPage('تحصيل المديونيات',body,'<button class="btn secondary" id="refreshDebts" type="button">تحديث الأرصدة</button>');
+    $('refreshDebts')?.addEventListener('click',patientDebtsPage);
+    $('sectionBody').querySelectorAll('[data-open-debt-patient]').forEach(b=>b.addEventListener('click',()=>patientFilePage(b.dataset.openDebtPatient)));
+    $('sectionBody').querySelectorAll('[data-collect-debt]').forEach(b=>b.addEventListener('click',()=>patientDebtPaymentForm(b.dataset.collectDebt,b.dataset.patientName,Number(b.dataset.balance))));
+    attachTableSearch('sectionBody','ابحث باسم المريض أو رقم الملف…');
+  }
+  function patientDebtPaymentForm(patientId,patientName,balance){
+    if(!isRole('admin','secretary'))return;
+    const isSecretary=isRole('secretary');
+    const d=new Date(Date.now()-new Date().getTimezoneOffset()*60000);
+    const localNow=d.toISOString().slice(0,16);
+    const dateField=isSecretary?'':'<div class="field"><label for="debtPaymentDate">تاريخ ووقت السداد</label><input id="debtPaymentDate" name="payment_date" type="datetime-local" value="'+localNow+'" required></div>';
+    const body='<div class="manager-card"><strong>'+esc(patientName)+'</strong><p class="muted small">الرصيد المستحق: '+money(balance)+'</p></div><form id="debtPaymentForm" class="manager-card"><div class="field"><label for="debtPaymentAmount">مبلغ السداد (جنيه)</label><input id="debtPaymentAmount" name="amount" type="number" min="0.01" max="'+balance+'" step="0.01" required></div><div class="field"><label for="debtPaymentMethod">طريقة الدفع</label><select id="debtPaymentMethod" name="payment_method" required><option value="">اختر طريقة الدفع</option><option value="cash">نقدي</option><option value="card">بطاقة</option><option value="transfer">تحويل</option><option value="other">أخرى</option></select></div>'+dateField+'<div class="field"><label for="debtPaymentNotes">ملاحظات (اختياري)</label><textarea id="debtPaymentNotes" name="notes" rows="2"></textarea></div><div id="debtPaymentMessage" aria-live="polite"></div><div class="toolbar"><button class="btn" type="submit">حفظ السداد</button><button class="btn secondary" id="cancelDebtPayment" type="button">رجوع</button></div></form>';
+    setPage('تسجيل سداد مديونية',body,'<button class="btn secondary" id="backDebtList" type="button">رجوع للمديونيات</button>');
+    $('backDebtList')?.addEventListener('click',patientDebtsPage);
+    $('cancelDebtPayment')?.addEventListener('click',patientDebtsPage);
+    $('debtPaymentForm')?.addEventListener('submit',async e=>{
+      e.preventDefault();
+      const form=e.currentTarget,fd=new FormData(form);
+      const amount=Number(fd.get('amount'));
+      if(!Number.isFinite(amount)||amount<=0||amount>balance){msg($('debtPaymentMessage'),'أدخل مبلغًا أكبر من صفر ولا يتجاوز الرصيد المستحق.');return;}
+      const method=String(fd.get('payment_method')||'');
+      if(!['cash','card','transfer','other'].includes(method)){msg($('debtPaymentMessage'),'اختر طريقة دفع صحيحة.');return;}
+      let paymentDate=new Date().toISOString();
+      if(!isSecretary){
+        const rawDate=String(fd.get('payment_date')||'');
+        const parsedDate=new Date(rawDate);
+        if(!rawDate||Number.isNaN(parsedDate.getTime())){msg($('debtPaymentMessage'),'تاريخ السداد غير صحيح.');return;}
+        paymentDate=parsedDate.toISOString();
+      }
+      const submit=form.querySelector('button[type="submit"]');submit.disabled=true;
+      const result=await sb.rpc('sanad_record_patient_debt_payment',{p_patient_id:patientId,p_amount:amount,p_payment_method:method,p_payment_date:paymentDate,p_notes:String(fd.get('notes')||'').trim()||null});
+      submit.disabled=false;
+      if(result.error){msg($('debtPaymentMessage'),'تعذر تسجيل السداد: '+result.error.message);return;}
+      msg($('debtPaymentMessage'),'تم تسجيل السداد وتحديث رصيد المريض.','success');
+      await patientDebtsPage();
     });
   }
 
