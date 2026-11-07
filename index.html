@@ -875,7 +875,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     const defaultDept=existing?.department_id||(depts.some(d=>d.id===state.profile.department_id)?state.profile.department_id:depts[0]?.id);
     const localDate=existing?new Date(new Date(existing.appointment_at).getTime()-new Date(existing.appointment_at).getTimezoneOffset()*60000).toISOString().slice(0,16):'';
     const apptType=existing?.appointment_type||'therapy';
-    setPage(editId?'تعديل الموعد':'إضافة موعد',`<form id="apptForm"><div class="form-grid"><div class="field span-2"><label>المريض *</label><select name="patient_id" required><option value="">اختر المريض</option>${patients.map(p=>`<option value="${esc(p.id)}" ${p.id===existing?.patient_id?'selected':''}>${esc(p.full_name)}</option>`).join('')}</select></div><div class="field"><label>القسم *</label><select name="department_id" required>${depts.map(d=>`<option value="${esc(d.id)}" ${d.id===defaultDept?'selected':''}>${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label>نوع الموعد *</label><select name="appointment_type"><option value="assessment" ${apptType==='assessment'?'selected':''}>كشف / تقييم أولي</option><option value="therapy" ${apptType==='therapy'?'selected':''}>جلسة علاجية</option></select></div><div class="field span-2"><label>الباقة المرتبطة (اختياري)</label><select name="package_id" id="appointmentPackage"><option value="">بدون باقة — جلسة فردية</option></select><small class="muted">عند تأكيد جلسة الباقة يُخصم استهلاك جلسة واحدة فقط، دون تسجيل إيراد مكرر.</small></div><div class="field"><label>التاريخ والوقت *</label><input name="appointment_at" type="datetime-local" value="${esc(localDate)}" required></div><div class="field"><label>المعالج المسؤول *</label><select name="therapist_id" id="appointmentTherapist" required><option value="">اختر المعالج</option>${state.therapists.filter(x=>x.department_ids.includes(defaultDept)).map(x=>`<option value="${esc(x.id)}" ${x.id===existing?.therapist_id?'selected':''}>${esc(x.full_name)}${x.job_title?' — '+esc(x.job_title):''}</option>`).join('')}</select></div><div class="field span-2"><div id="doctorDaySchedule" class="analysis-note">اختر التاريخ والمعالج لعرض مواعيده المحجوزة في هذا اليوم.</div></div><div class="field"><label>المدة بالدقائق *</label><input name="duration" type="number" min="5" max="240" value="${esc(existing?.duration_minutes??'')}" required><small class="muted" id="durationHint">تُحمّل المدة الافتراضية من إعدادات المريض والقسم.</small></div><div class="field"><label>الحالة</label><select name="status" disabled>${[[existing?.status||'scheduled',statusName(existing?.status||'scheduled')]].map(([v,l])=>`<option value="${v}" selected>${l}</option>`).join('')}</select><small class="muted">تغيير الحالة يتم من أزرار الموعد في الكلندر حتى يُسجل في سجل الحالات.</small></div><div class="field span-2"><label>ملاحظات</label><textarea name="notes">${esc(existing?.notes||'')}</textarea></div></div><div class="toolbar"><button class="btn" type="button" id="saveAppointmentBtn">${editId?'حفظ التعديلات':'حفظ الموعد'}</button><button class="btn ghost" id="cancelAppt" type="button">رجوع</button></div><div id="apptMessage"></div></form>`);
+    setPage(editId?'تعديل الموعد':'إضافة موعد',`<form id="apptForm"><div class="form-grid"><div class="field span-2"><label>المريض *</label><select name="patient_id" required><option value="">اختر المريض</option>${patients.map(p=>`<option value="${esc(p.id)}" ${p.id===existing?.patient_id?'selected':''}>${esc(p.full_name)}</option>`).join('')}</select></div><div class="field"><label>القسم *</label><select name="department_id" required>${depts.map(d=>`<option value="${esc(d.id)}" ${d.id===defaultDept?'selected':''}>${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label>نوع الموعد *</label><select name="appointment_type"><option value="assessment" ${apptType==='assessment'?'selected':''}>كشف / تقييم أولي</option><option value="therapy" ${apptType==='therapy'?'selected':''}>جلسة علاجية</option></select></div><div class="field span-2"><label>الباقة المرتبطة (اختياري)</label><select name="package_id" id="appointmentPackage"><option value="">بدون باقة — جلسة فردية</option></select><small class="muted">عند تأكيد جلسة الباقة يُخصم استهلاك جلسة واحدة فقط، دون تسجيل إيراد مكرر.</small></div><div class="field"><label>التاريخ والوقت *</label><input name="appointment_at" type="datetime-local" value="${esc(localDate)}" required></div><div class="field"><label>المعالج المسؤول *</label><select name="therapist_id" id="appointmentTherapist" required><option value="">اختر المعالج</option>${state.therapists.filter(x=>x.department_ids.includes(defaultDept)).map(x=>`<option value="${esc(x.id)}" ${x.id===existing?.therapist_id?'selected':''}>${esc(x.full_name)}${x.job_title?' — '+esc(x.job_title):''}</option>`).join('')}</select></div><div class="field span-2"><div id="doctorDaySchedule" class="analysis-note">اختر التاريخ والمعالج لعرض مواعيده المحجوزة في هذا اليوم.</div></div><div class="field"><label>المدة بالدقائق *</label><input name="duration" type="number" min="5" max="240" value="${esc(existing?.duration_minutes??'')}" required><small class="muted" id="durationHint">تُحمّل المدة الافتراضية من إعدادات المريض والقسم.</small></div><div class="field" id="appointmentSessionPriceField" style="${apptType==='therapy'&&!existing?.package_id?'':'display:none'}"><label>سعر الجلسة (ج.م) *</label><input name="session_price" type="number" min="0.01" step="0.01" value="${esc(existing?.session_price??'')}" ${apptType==='therapy'&&!existing?.package_id?'required':'disabled'}><small class="muted">يُحفظ السعر مع الموعد ويُستخدم عند إتمام الجلسة. لا يُطلب سعر عند الحجز على باقة.</small></div><div class="field"><label>الحالة</label><select name="status" disabled>${[[existing?.status||'scheduled',statusName(existing?.status||'scheduled')]].map(([v,l])=>`<option value="${v}" selected>${l}</option>`).join('')}</select><small class="muted">تغيير الحالة يتم من أزرار الموعد في الكلندر حتى يُسجل في سجل الحالات.</small></div><div class="field span-2"><label>ملاحظات</label><textarea name="notes">${esc(existing?.notes||'')}</textarea></div></div><div class="toolbar"><button class="btn" type="button" id="saveAppointmentBtn">${editId?'حفظ التعديلات':'حفظ الموعد'}</button><button class="btn ghost" id="cancelAppt" type="button">رجوع</button></div><div id="apptMessage"></div></form>`);
     const refreshPackages=async()=>{
       const patientId=$('apptForm').elements.patient_id.value,departmentId=$('apptForm').elements.department_id.value;
       const select=$('appointmentPackage');const keep=select.value||existing?.package_id||'';
@@ -890,6 +890,10 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     $('cancelAppt').addEventListener('click',appointmentsPage);
     $('apptForm').elements.patient_id.addEventListener('change',refreshPackages);
     $('apptForm').elements.department_id.addEventListener('change',()=>{refreshPackages();refreshAppointmentDuration();});
+    const syncAppointmentPriceField=()=>{const field=$('appointmentSessionPriceField'),input=$('apptForm').elements.session_price,isIndividual=$('apptForm').elements.appointment_type.value==='therapy'&&!$('appointmentPackage').value;field.style.display=isIndividual?'':'none';input.disabled=!isIndividual;input.required=isIndividual;if(!isIndividual)input.value='';};
+    $('apptForm').elements.appointment_type.addEventListener('change',syncAppointmentPriceField);
+    $('appointmentPackage').addEventListener('change',()=>{syncAppointmentPriceField();if(!$('appointmentPackage').value)refreshAppointmentDuration();});
+    syncAppointmentPriceField();
     $('apptForm').elements.department_id.addEventListener('change',()=>{
       const select=$('appointmentTherapist');
       const deptId=$('apptForm').elements.department_id.value;
@@ -929,7 +933,8 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     refreshDoctorDaySchedule();
     const refreshAppointmentDuration=async()=>{
       const patientId=$('apptForm').elements.patient_id.value,departmentId=$('apptForm').elements.department_id.value;
-      if(existing && patientId===existing.patient_id && departmentId===existing.department_id){$('durationHint').textContent='المدة المحفوظة لهذا الموعد.';return;}
+      const sameExisting=!!existing && patientId===existing.patient_id && departmentId===existing.department_id;
+      if(sameExisting)$('durationHint').textContent='المدة المحفوظة لهذا الموعد.';
       if(!patientId||!departmentId)return;
       const [setting,dept]=await Promise.all([
         sb.from('patient_department_settings').select('duration_minutes,session_price').eq('patient_id',patientId).eq('department_id',departmentId).maybeSingle(),
@@ -937,11 +942,15 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       ]);
       if(setting.error||dept.error){$('durationHint').textContent='تعذر تحميل المدة الافتراضية؛ أدخلها يدويًا.';return;}
       const duration=setting.data?.duration_minutes??dept.data?.default_duration_minutes;
-      if(duration!=null&&duration!==''){
+      if(!sameExisting&&duration!=null&&duration!==''){
         $('apptForm').elements.duration.value=duration;
         $('durationHint').textContent='المدة المقترحة: '+duration+' دقيقة. يمكنك تعديلها لهذا الموعد.';
-      }else{
+      }else if(!sameExisting){
         $('durationHint').textContent='لا توجد مدة افتراضية لهذا القسم/المريض. أدخل المدة يدويًا.';
+      }
+      const priceInput=$('apptForm').elements.session_price;
+      if(priceInput&&!$('appointmentPackage').value&&(!sameExisting||priceInput.value==='')){
+        if(setting.data?.session_price!=null)priceInput.value=setting.data.session_price;
       }
       
     };
@@ -987,6 +996,9 @@ tr.voided td{opacity:.55;text-decoration:line-through}
         }
         const duration=Number(f.get('duration'));
         if(!Number.isFinite(duration)||duration<5||duration>240){msg(message,'أدخل مدة جلسة صحيحة بين 5 و240 دقيقة.');return;}
+        const packageId=String(f.get('package_id')||'');
+        const sessionPrice=type==='therapy'&&!packageId?Number(f.get('session_price')):null;
+        if(type==='therapy'&&!packageId&&(!Number.isFinite(sessionPrice)||sessionPrice<=0)){msg(message,'أدخل سعر الجلسة أكبر من صفر قبل حفظ الموعد.');return;}
         const appointmentDate=new Date(appointmentValue);
         if(Number.isNaN(appointmentDate.getTime())){msg(message,'التاريخ والوقت غير صحيحين.');return;}
         const appointmentEndDate=new Date(appointmentDate.getTime()+duration*60000);
@@ -1000,9 +1012,9 @@ tr.voided td{opacity:.55;text-decoration:line-through}
           status:f.get('status')||existing?.status||'scheduled',
           notes:f.get('notes')||null,
           appointment_type:type,
-          package_id:f.get('package_id')||null,
-          // الجلسة المكتملة سعرها مسجل في الحسابات؛ لا نمسّه من نموذج الموعد أبدًا
-          session_price:existing?.status==='completed'?(existing.session_price??null):null
+          package_id:packageId||null,
+          // سعر الجلسة الفردية يُحفظ وقت الحجز؛ مواعيد الباقات والكشف لا تحمل سعر جلسة فردية.
+          session_price:existing?.status==='completed'?(existing.session_price??null):sessionPrice
         };
         if(!['cancelled','no_show'].includes(payload.status)){
           const fmtT=v=>new Date(v).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'});
@@ -1039,7 +1051,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
           const saved=verifyResult.data;
           if(!saved)throw new Error('لم يتم العثور على الموعد بعد التعديل. راجع صلاحية تعديل المواعيد.');
           const sameTime=Date.parse(saved.appointment_at)===appointmentDate.getTime();
-          const samePrice=existing?.status==='completed'?Number(saved.session_price??0)===Number(existing.session_price??0):saved.session_price==null;
+          const samePrice=Number(saved.session_price??0)===Number(payload.session_price??0);
           const matches=saved.patient_id===patientId && saved.department_id===departmentId &&
             (saved.therapist_id||null)===(payload.therapist_id||null) && sameTime &&
             Number(saved.duration_minutes)===duration && Date.parse(saved.appointment_end_at)===Date.parse(payload.appointment_end_at) && saved.status===payload.status &&
