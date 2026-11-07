@@ -914,7 +914,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     const refreshPackages=async()=>{
       const patientId=$('apptForm').elements.patient_id.value,departmentId=$('apptForm').elements.department_id.value;
       const select=$('appointmentPackage');const keep=select.value||existing?.package_id||'';
-      select.innerHTML='<option value="">بدون باقة — دفع لكل جلسة</option>';
+      select.innerHTML='<option value="">اختر باقة أو حدد موعدًا مستقلًا</option><option value="__none__">بدون باقة — موعد مستقل</option>';
       if(!patientId||!departmentId)return;
       const {data,error}=await sb.from('patient_packages').select('id,package_name,total_sessions,status,expires_at').eq('patient_id',patientId).eq('department_id',departmentId).order('purchased_at',{ascending:false});
       if(error){msg($('apptMessage'),'تعذر تحميل باقات المريض: '+error.message);return;}
@@ -927,7 +927,8 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     $('apptForm').elements.department_id.addEventListener('change',()=>{refreshPackages();refreshAppointmentDuration();});
     const syncAppointmentPriceField=()=>{const field=$('appointmentSessionPriceField'),input=$('apptForm').elements.session_price,isIndividual=$('apptForm').elements.appointment_type.value==='therapy'&&!$('appointmentPackage').value;field.style.display=isIndividual?'':'none';input.disabled=!isIndividual;input.required=isIndividual;if(!isIndividual)input.value='';};
     $('apptForm').elements.appointment_type.addEventListener('change',syncAppointmentPriceField);
-    $('appointmentPackage').addEventListener('change',()=>{syncAppointmentPriceField();if(!$('appointmentPackage').value)refreshAppointmentDuration();});
+    $('appointmentPackage').addEventListener('change',()=>{syncAppointmentPriceField();if(!$('appointmentPackage').value||$('appointmentPackage').value==='__none__')refreshAppointmentDuration();});
+    await refreshPackages();
     syncAppointmentPriceField();
     $('apptForm').elements.department_id.addEventListener('change',()=>{
       const select=$('appointmentTherapist');
@@ -1031,7 +1032,13 @@ tr.voided td{opacity:.55;text-decoration:line-through}
         }
         const duration=Number(f.get('duration'));
         if(!Number.isFinite(duration)||duration<5||duration>240){msg(message,'أدخل مدة جلسة صحيحة بين 5 و240 دقيقة.');return;}
-        const packageId=String(f.get('package_id')||'');
+        const packageChoice=String(f.get('package_id')||'');
+        const packageId=packageChoice==='__none__'?'':packageChoice;
+        if(type==='assessment'&&!packageChoice){
+          const activePackages=await sb.from('patient_packages').select('id').eq('patient_id',patientId).eq('department_id',departmentId).eq('status','active').limit(1);
+          if(activePackages.error)throw new Error('تعذر التحقق من باقات المريض: '+activePackages.error.message);
+          if(activePackages.data?.length){msg(message,'المريض لديه باقة نشطة. اختر الباقة لربط الكشف بها، أو اختر «بدون باقة — موعد مستقل» إذا كان الكشف خارج الباقة.');return;}
+        }
         const sessionPrice=type==='therapy'&&!packageId?Number(f.get('session_price')):null;
         if(type==='therapy'&&!packageId&&(!Number.isFinite(sessionPrice)||sessionPrice<=0)){msg(message,'أدخل سعر الجلسة أكبر من صفر قبل حفظ الموعد.');return;}
         const appointmentDate=new Date(appointmentValue);
