@@ -595,7 +595,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     const errs=[aRes,kRes,payRes,medicalRes,sessionsRes,accountChargesRes,accountReceiptsRes,accountAllocationsRes].filter(x=>x.error).map(x=>x.error.message);
     const info=(l,v)=>`<div class="info-item"><small>${l}</small><div>${v}</div></div>`;
     const sexLabel=({male:'ذكر',female:'أنثى'})[p.sex]||'—';
-    const apptTable=appts.length?`<div class="table-wrap"><table><thead><tr><th>التاريخ والوقت</th><th>القسم</th><th>المعالج</th><th>النوع</th><th>الحالة</th>${showMoney?'<th>سعر الجلسة</th><th>المحصل</th>':''}</tr></thead><tbody>${appts.map(a=>`<tr><td>${fmt(a.appointment_at)}</td><td>${esc(deptName(a.department_id))}</td><td>${esc(staffName(a.therapist_id))}</td><td>${a.appointment_type==='assessment'?'كشف':'جلسة'}${a.package_id?' (باقة)':''}</td><td><span class="badge ${['cancelled','no_show'].includes(a.status)?'cancelled':a.status==='pending'?'pending':''}">${esc(statusName(a.status))}</span></td>${showMoney?`<td>${a.session_price!=null?money(a.session_price):'—'}</td><td>${a.status==='completed'&&a.collected_amount!=null?money(a.collected_amount):'—'}</td>`:''}</tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد مواعيد مسجلة لهذا المريض.</div>';
+    const apptTable=appts.length?`<div class="table-wrap"><table><thead><tr><th>التاريخ والوقت</th><th>القسم</th><th>المعالج</th><th>النوع</th><th>الحالة</th>${showMoney?'<th>سعر الجلسة</th><th>المحصل</th>':''}</tr></thead><tbody>${appts.map(a=>`<tr><td>${fmt(a.appointment_at)}</td><td>${esc(deptName(a.department_id))}</td><td>${esc(staffName(a.therapist_id))}</td><td>${a.appointment_type==='assessment'?'كشف':'جلسة'}${a.package_id?' (باقة)':''}</td><td><span class="badge ${['cancelled','no_show'].includes(a.status)?'cancelled':''}">${esc(statusName(a.status))}</span></td>${showMoney?`<td>${a.session_price!=null?money(a.session_price):'—'}</td><td>${a.status==='completed'&&a.collected_amount!=null?money(a.collected_amount):'—'}</td>`:''}</tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد مواعيد مسجلة لهذا المريض.</div>';
     let money_html='',stmtRows=[],stmtInfo={};
     if(showMoney){
       const pkgTable=pkgs.length?`<div class="table-wrap"><table><thead><tr><th>الباقة</th><th>القسم</th><th>الجلسات المستهلكة</th><th>قيمة الباقة</th><th>المدفوع</th><th>المتبقي</th></tr></thead><tbody>${pkgs.map(k=>`<tr><td>${esc(k.package_name)}</td><td>${esc(k.department_name||deptName(k.department_id))}</td><td>${Number(k.total_sessions||0)-Number(k.remaining_sessions||0)} / ${esc(k.total_sessions)}</td><td>${money(k.package_total)}</td><td>${money(k.total_paid)}</td><td>${money(k.remaining_amount)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد باقات لهذا المريض.</div>';
@@ -750,7 +750,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       const start=new Date(a.appointment_at);
       const end=a.appointment_end_at?new Date(a.appointment_end_at):new Date(start.getTime()+Number(a.duration_minutes||45)*60000);
       const isAssess=a.appointment_type==='assessment';
-      const open=a.status==='scheduled'; // قاعدة البيانات تسمح بالإتمام من scheduled فقط؛ confirmed للعرض/التعديل دون زر إتمام.
+      const open=a.status==='scheduled'; // الإتمام متاح للموعد المجدول فقط.
       let actions='';
       if(editable){
         if(open)actions+=isAssess?`<button class="btn secondary" data-act="assess" data-id="${esc(a.id)}" type="button">تأكيد إتمام الكشف</button>`:`<button class="btn secondary" data-act="complete" data-id="${esc(a.id)}" type="button">إتمام الجلسة</button>`;
@@ -760,7 +760,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
         if(isRole('admin','secretary')&&a.status==='completed'&&!isAssess)actions+=`<button class="btn danger" data-act="reverse" data-id="${esc(a.id)}" type="button">تصحيح جلسة مكتملة</button>`;
         if(isAdmin()&&a.status!=='completed')actions+=`<button class="btn danger" data-delete="appointment" data-id="${esc(a.id)}" type="button">حذف</button>`;
       }
-      const badgeClass=['cancelled','no_show'].includes(a.status)?'cancelled':a.status==='pending'?'pending':'';
+      const badgeClass=['cancelled','no_show'].includes(a.status)?'cancelled':'';
       const meta=[deptName(a.department_id),'د. '+staffName(a.therapist_id),(a.duration_minutes??45)+' دقيقة',isAssess?'كشف':'جلسة علاجية',a.package_id?'ضمن باقة':''].filter(Boolean).map(esc).join(' · ');
       return `<div class="calendar-appointment-card ${a.status==='cancelled'?'cancelled':a.status==='completed'?'done':''}"><div class="calendar-appointment-time">${cairoTime(start)} – ${cairoTime(end)}</div><div class="calendar-appointment-main"><strong>${esc(a.patients?.full_name||'—')}</strong><div class="calendar-appointment-meta">${meta}</div>${a.notes?`<div class="calendar-appointment-meta">${esc(a.notes)}</div>`:''}</div><div class="calendar-appointment-status"><span class="badge ${badgeClass}">${esc(statusName(a.status))}</span></div>${actions?`<div class="calendar-appointment-actions">${actions}</div>`:''}</div>`;
     }).join(''):'<div class="empty">لا توجد مواعيد في هذا اليوم.</div>';
@@ -862,7 +862,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     if(error){alert('تعذر إلغاء الموعد: '+error.message);return;}
     await appointmentsPage();
   }
-  function statusName(s){return ({scheduled:'مجدول',confirmed:'مؤكد',completed:'تم',cancelled:'ملغي',pending:'قيد الانتظار',no_show:'لم يحضر'})[s]||s||'مجدول';}
+  function statusName(s){return ({scheduled:'مجدول',completed:'مكتمل',cancelled:'ملغي',no_show:'لم يحضر'})[s]||s||'مجدول';}
   async function appointmentForm(editId=null){
     if(!isRole('admin','secretary','receptionist')){setPage('المواعيد','<div class="notice error">إضافة وتعديل المواعيد متاحان للمدير الإداري والسكرتارية فقط.</div>');return;}
     try{await refreshCalendarTherapists();}catch(e){setPage('إضافة موعد',`<div class="notice error">${esc(e.message)}</div>`);return;}
