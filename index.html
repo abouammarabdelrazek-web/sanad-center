@@ -1310,11 +1310,12 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       activeApprovals=approvalResult.data||[];
     }
     const approvalByPackage=new Map(activeApprovals.map(a=>[a.package_id,a]));
-    $('sectionBody').innerHTML=rows.length?`<div class="notice">إذا لم تكن الباقة مسددة بالكامل، لا يجوز استخدامها إلا بعد موافقة المدير الإداري لهذه الباقة تحديدًا، مع تسجيل سبب الموافقة. الموافقة لا تتجاوز قيمة الباقة أو عدد جلساتها، وتُلغى تلقائيًا عند تغير السعر أو عدد الجلسات.</div><div class="table-wrap"><table><thead><tr><th>المريض</th><th>القسم</th><th>اسم الباقة</th><th>رسوم الكشف</th><th>سعر الجلسة</th><th>الجلسات</th><th>قيمة الباقة</th><th>الحالة</th><th>المدفوع</th><th>المتبقي</th><th>المتبقي جلسات</th><th>حالة الكشف</th><th>اعتماد الاستخدام</th><th>الإجراءات</th></tr></thead><tbody>${rows.map(p=>{const approval=approvalByPackage.get(p.package_id);const needsApproval=p.status==='active'&&Number(p.remaining_amount||0)>0;return `<tr><td>${esc(p.patient_name)}</td><td>${esc(p.department_name)}</td><td>${esc(p.package_name)}</td><td>${money(p.assessment_fee)}</td><td>${money(p.session_price)}</td><td>${esc(p.total_sessions)}</td><td><strong>${money(p.package_total)}</strong></td><td>${({active:'نشطة',completed:'مكتملة',expired:'منتهية',cancelled:'ملغاة'})[p.status]||esc(p.status)}</td><td>${money(p.total_paid)}</td><td>${money(p.remaining_amount)}</td><td>${esc(p.remaining_sessions)} / ${esc(p.total_sessions)}</td><td>${p.assessment_completed_at?'<span class="badge">تم الكشف</span>':'<span class="badge pending">لم يتم</span>'}</td><td>${!needsApproval?'—':approval?`<span class="badge">موافق عليها</span><div class="small muted">${esc(approval.reason)}</div><button class="btn danger" data-revoke-package-approval="${esc(approval.id)}" type="button">إلغاء الموافقة</button>`:'<span class="badge pending">تحتاج موافقة المدير</span>'+(isAdmin()?`<button class="btn secondary" data-approve-package="${esc(p.package_id)}" type="button">اعتماد الاستخدام</button>`:'')}</td><td><div class="toolbar"><button class="btn secondary" data-package-payment="${esc(p.package_id)}" type="button">تسجيل دفعة</button><button class="btn ghost" data-edit-package="${esc(p.package_id)}" type="button">تعديل الباقة</button><button class="btn ghost" data-package-history="${esc(p.package_id)}" type="button">سجل الدفعات</button>${isAdmin()?`<button class="btn danger" data-delete="package" data-id="${esc(p.package_id)}" type="button">حذف</button>`:''}</div></td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty">لا توجد باقات مسجلة حتى الآن. ابدأ بإنشاء أول باقة.</div>';
+    $('sectionBody').innerHTML=rows.length?`<div class="notice">إذا لم تكن الباقة مسددة بالكامل، لا يجوز استخدامها إلا بعد موافقة المدير الإداري لهذه الباقة تحديدًا، مع تسجيل سبب الموافقة. الموافقة لا تتجاوز قيمة الباقة أو عدد جلساتها، وتُلغى تلقائيًا عند تغير السعر أو عدد الجلسات.</div><div class="table-wrap"><table><thead><tr><th>المريض</th><th>القسم</th><th>اسم الباقة</th><th>رسوم الكشف</th><th>سعر الجلسة</th><th>الجلسات</th><th>قيمة الباقة</th><th>الحالة</th><th>المدفوع</th><th>المتبقي</th><th>المتبقي جلسات</th><th>حالة الكشف</th><th>اعتماد الاستخدام</th><th>الإجراءات</th></tr></thead><tbody>${rows.map(p=>{const approval=approvalByPackage.get(p.package_id);const needsApproval=p.status==='active'&&Number(p.remaining_amount||0)>0;return `<tr><td>${esc(p.patient_name)}</td><td>${esc(p.department_name)}</td><td>${esc(p.package_name)}</td><td>${money(p.assessment_fee)}</td><td>${money(p.session_price)}</td><td>${esc(p.total_sessions)}</td><td><strong>${money(p.package_total)}</strong></td><td>${({active:'نشطة',completed:'مكتملة',expired:'منتهية',cancelled:'ملغاة'})[p.status]||esc(p.status)}</td><td>${money(p.total_paid)}</td><td>${money(p.remaining_amount)}</td><td>${esc(p.remaining_sessions)} / ${esc(p.total_sessions)}</td><td>${p.assessment_completed_at?'<span class="badge">تم الكشف</span>':'<span class="badge pending">لم يتم</span>'}</td><td>${!needsApproval?'—':approval?`<span class="badge">موافق عليها</span><div class="small muted">${esc(approval.reason)}</div><button class="btn danger" data-revoke-package-approval="${esc(approval.id)}" type="button">إلغاء الموافقة</button>`:'<span class="badge pending">تحتاج موافقة المدير</span>'+(isAdmin()?`<button class="btn secondary" data-approve-package="${esc(p.package_id)}" type="button">اعتماد الاستخدام</button>`:'')}</td><td><div class="toolbar"><button class="btn secondary" data-package-payment="${esc(p.package_id)}" type="button" ${p.status==='cancelled'?'disabled':''}>تسجيل دفعة</button><button class="btn ghost" data-package-settle="${esc(p.package_id)}" type="button" ${p.status==='cancelled'?'disabled':''}>تسوية / استرداد</button><button class="btn ghost" data-edit-package="${esc(p.package_id)}" type="button">تعديل الباقة</button><button class="btn ghost" data-package-history="${esc(p.package_id)}" type="button">سجل الدفعات</button>${isAdmin()?`<button class="btn danger" data-delete="package" data-id="${esc(p.package_id)}" type="button">حذف</button>`:''}</div></td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty">لا توجد باقات مسجلة حتى الآن. ابدأ بإنشاء أول باقة.</div>';
     attachTableSearch('sectionBody','ابحث عن المريض أو اسم الباقة أو القسم…');
     $('sectionActions').innerHTML='<button class="btn" id="addPackageBtn" type="button">+ إنشاء باقة جديدة</button>';
     $('addPackageBtn')?.addEventListener('click',packageForm);
     $('sectionBody').querySelectorAll('[data-package-payment]').forEach(b=>b.addEventListener('click',()=>packagePaymentForm(b.dataset.packagePayment)));
+    $('sectionBody').querySelectorAll('[data-package-settle]').forEach(b=>b.addEventListener('click',()=>packageSettlementForm(b.dataset.packageSettle)));
     $('sectionBody').querySelectorAll('[data-package-history]').forEach(b=>b.addEventListener('click',()=>packagePaymentHistory(b.dataset.packageHistory)));
     $('sectionBody').querySelectorAll('[data-edit-package]').forEach(b=>b.addEventListener('click',()=>editPackageForm(b.dataset.editPackage)));
     $('sectionBody').querySelectorAll('[data-approve-package]').forEach(b=>b.addEventListener('click',async()=>{const reason=prompt('اكتب سبب موافقة المدير على استخدام هذه الباقة قبل سدادها بالكامل:');if(reason===null)return;if(reason.trim().length<3){alert('يجب كتابة سبب واضح لا يقل عن 3 أحرف.');return;}b.disabled=true;const result=await sb.rpc('sanad_approve_package_usage_before_full_payment',{p_package_id:b.dataset.approvePackage,p_reason:reason.trim()});if(result.error){b.disabled=false;alert('تعذر اعتماد الباقة: '+result.error.message);return;}alert('تم تسجيل موافقة المدير لهذه الباقة.');await packagesPage();}));
@@ -1357,6 +1358,52 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       msg($('editPackageMessage'),'تم حفظ تعديلات الباقة بنجاح.','success');setTimeout(packagesPage,700);
     });
   }
+  async function packageSettlementForm(packageId){
+    if(!isRole('admin','secretary'))return;
+    const {data:p,error}=await sb.from('sanad_package_summary').select('package_id,patient_id,department_id,patient_name,package_name,assessment_fee,assessment_completed_at,session_price,total_sessions,used_sessions,total_paid,status').eq('package_id',packageId).maybeSingle();
+    if(error||!p){alert('تعذر تحميل بيانات الباقة: '+(error?.message||'غير موجودة'));return;}
+    if(p.status==='cancelled'){alert('هذه الباقة ملغاة أو تمت تسويتها بالفعل.');return;}
+    const paid=Number(p.total_paid||0);
+    const assessmentUsed=p.assessment_completed_at?Number(p.assessment_fee||0):0;
+    const used=Number(p.used_sessions||0);
+    const sessionValue=used*Number(p.session_price||0);
+    const refund=Math.max(0,Math.round((paid-assessmentUsed-sessionValue)*100)/100);
+    const lines=[
+      'سيتم إنهاء الباقة وتثبيت تسويتها مع الاحتفاظ بكل الدفعات والجلسات في السجل.',
+      'إجمالي المدفوع الفعلي: '+money(paid),
+      'قيمة الكشف المستهلك'+(p.assessment_completed_at?' (تم بالفعل)':' (لم يتم)')+': '+money(assessmentUsed),
+      'الجلسات غير الملغاة: '+used+' × '+money(p.session_price)+' = '+money(sessionValue),
+      'المبلغ المستحق رده: '+money(refund)
+    ];
+    if(!confirm(lines.join('\n')+'\n\nهل تريد متابعة التسوية؟'))return;
+    const reason=prompt('اكتب سبب تسوية وإلغاء الباقة (مطلوب):');
+    if(reason===null)return;
+    if(reason.trim().length<3){alert('سبب التسوية يجب ألا يقل عن 3 أحرف.');return;}
+    let method=null,reference=null,proof=null;
+    if(refund>0){
+      const methodLabel=prompt('طريقة رد المبلغ: اكتب cash أو card أو transfer أو other');
+      if(methodLabel===null)return;
+      method=methodLabel.trim().toLowerCase();
+      if(!['cash','card','transfer','other'].includes(method)){alert('طريقة الرد غير صحيحة.');return;}
+      reference=prompt('الرقم المرجعي لعملية الرد (اختياري، اضغط إلغاء/اتركه فارغًا لإدخال وصف إثبات):');
+      if(reference===null)return;
+      if(!reference.trim()){
+        proof=prompt('اكتب وصف إثبات رد المبلغ (5 أحرف على الأقل):');
+        if(proof===null)return;
+        if(proof.trim().length<5){alert('وصف الإثبات يجب ألا يقل عن 5 أحرف.');return;}
+      }
+      if(!confirm('تأكيد تسجيل رد مبلغ '+money(refund)+' بطريقة '+({cash:'نقدي',card:'بطاقة',transfer:'تحويل',other:'أخرى'}[method])+'؟ لا تؤكد إلا بعد تنفيذ الرد فعليًا.'))return;
+    }else if(!confirm('لا يوجد مبلغ مستحق للرد. سيتم توثيق التسوية وإلغاء الباقة دون حركة مالية. هل تريد المتابعة؟'))return;
+    const buttons=$('sectionBody').querySelectorAll('[data-package-settle]');
+    buttons.forEach(x=>x.disabled=true);
+    const result=await sb.rpc('sanad_settle_patient_package',{
+      p_package_id:packageId,p_reason:reason.trim(),p_refund_method:method,
+      p_refund_reference:reference?.trim()||null,p_proof_notes:proof?.trim()||null
+    });
+    if(result.error){buttons.forEach(x=>x.disabled=false);alert('تعذر تسوية الباقة: '+result.error.message);return;}
+    alert('تم تسجيل تسوية الباقة بنجاح. المبلغ المسترد: '+money(refund)+'.');
+    await packagesPage();
+  }
   async function packagePaymentForm(packageId){
     if(!isRole('admin','secretary'))return;
     const {data:p,error}=await sb.from('sanad_package_summary').select('*').eq('package_id',packageId).maybeSingle();
@@ -1371,7 +1418,10 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     if(pError||!p){setPage('سجل الدفعات',`<div class="notice error">تعذر تحميل الباقة: ${esc(pError?.message||'غير موجودة')}</div>`);return;}
     const {data,error}=await sb.from('package_payments').select('id,amount,payment_method,payment_date,reference_number,notes,voided_at,void_reason,reversal_entry_id').eq('package_id',packageId).order('payment_date',{ascending:false});
     if(error){setPage('سجل الدفعات',`<div class="notice error">تعذر تحميل الدفعات: ${esc(error.message)}</div>`);return;}
-    const rows=data||[];setPage('سجل دفعات الباقة',`<div class="manager-card"><strong>${esc(p.patient_name)} — ${esc(p.package_name)}</strong><p class="muted small">قيمة الباقة: ${money(p.package_total)} · المدفوع الفعلي: ${money(p.total_paid)} · المتبقي: ${money(p.remaining_amount)}</p></div>${rows.length?`<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>المبلغ</th><th>طريقة الدفع</th><th>المرجع</th><th>الحالة / سبب الإلغاء</th><th>الإجراءات</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${dateTime(x.payment_date)}</td><td>${money(x.amount)}</td><td>${({cash:'نقدي',card:'بطاقة',transfer:'تحويل',other:'أخرى'})[x.payment_method]||esc(x.payment_method)}</td><td>${esc(x.reference_number||'—')}</td><td>${x.voided_at?`<span class="badge danger">ملغاة</span><div class="muted small">${esc(x.void_reason||'—')}</div><div class="muted small">${dateTime(x.voided_at)}</div>`:'<span class="badge">سارية</span>'}</td><td>${!x.voided_at?`<button class="btn danger" type="button" data-void-package-payment="${esc(x.id)}">حذف الدفعة</button>`:'—'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد دفعات مسجلة لهذه الباقة.</div>'}`, '<button class="btn secondary" id="backPackages" type="button">رجوع للباقات</button>');
+    const {data:settlement,error:settlementError}=await sb.from('package_settlements').select('amount_paid,consumed_assessment_fee,consumed_sessions,consumed_session_value,refundable_amount,refund_method,refund_reference,proof_notes,reason,settled_at,financial_entry_id').eq('package_id',packageId).maybeSingle();
+    if(settlementError){setPage('سجل الدفعات',`<div class="notice error">تعذر تحميل سجل التسوية: ${esc(settlementError.message)}</div>`);return;}
+    const settlementHtml=settlement?`<div class="manager-card"><strong>تسوية الباقة</strong><p>المدفوع الفعلي: ${money(settlement.amount_paid)} · قيمة الكشف المستهلك: ${money(settlement.consumed_assessment_fee)} · الجلسات المستهلكة: ${settlement.consumed_sessions} ( ${money(settlement.consumed_session_value)} )</p><p><strong>المبلغ المسترد: ${money(settlement.refundable_amount)}</strong> · ${settlement.refund_method?({cash:'نقدي',card:'بطاقة',transfer:'تحويل',other:'أخرى'}[settlement.refund_method]||esc(settlement.refund_method)):'لا يوجد رد مالي'}</p><p class="muted small">السبب: ${esc(settlement.reason)} · التاريخ: ${dateTime(settlement.settled_at)} · المرجع: ${esc(settlement.refund_reference||'—')} · إثبات الرد: ${esc(settlement.proof_notes||'—')}</p></div>`:'';
+    const rows=data||[];setPage('سجل دفعات الباقة',settlementHtml+`<div class="manager-card"><strong>${esc(p.patient_name)} — ${esc(p.package_name)}</strong><p class="muted small">قيمة الباقة: ${money(p.package_total)} · المدفوع الفعلي: ${money(p.total_paid)} · المتبقي: ${money(p.remaining_amount)}</p></div>${rows.length?`<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>المبلغ</th><th>طريقة الدفع</th><th>المرجع</th><th>الحالة / سبب الإلغاء</th><th>الإجراءات</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${dateTime(x.payment_date)}</td><td>${money(x.amount)}</td><td>${({cash:'نقدي',card:'بطاقة',transfer:'تحويل',other:'أخرى'})[x.payment_method]||esc(x.payment_method)}</td><td>${esc(x.reference_number||'—')}</td><td>${x.voided_at?`<span class="badge danger">ملغاة</span><div class="muted small">${esc(x.void_reason||'—')}</div><div class="muted small">${dateTime(x.voided_at)}</div>`:'<span class="badge">سارية</span>'}</td><td>${!x.voided_at?`<button class="btn danger" type="button" data-void-package-payment="${esc(x.id)}">حذف الدفعة</button>`:'—'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد دفعات مسجلة لهذه الباقة.</div>'}`, '<button class="btn secondary" id="backPackages" type="button">رجوع للباقات</button>');
     attachTableSearch('sectionBody','ابحث في سجل دفعات الباقة…');
     $('backPackages').addEventListener('click',packagesPage);
     $('sectionBody').querySelectorAll('[data-void-package-payment]').forEach(btn=>btn.addEventListener('click',async()=>{
