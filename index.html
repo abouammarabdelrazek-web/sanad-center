@@ -529,7 +529,39 @@ tr.voided td{opacity:.55;text-decoration:line-through}
   function statementTableHtml(rows,fmtDay){
     if(!rows.length)return '<div class="empty">لا توجد حركات في هذه الفترة.</div>';
     const c=rows.reduce((n,x)=>n+x.effCharge,0),p=rows.reduce((n,x)=>n+x.effPaid,0);
-    return `<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>البيان</th><th>مستحق</th><th>مدفوع</th><th>الرصيد</th></tr></thead><tbody>${rows.map(x=>`<tr class="${x.voided?'voided':''}"><td>${fmtDay(x.date)}</td><td>${esc(x.label)}${x.voided?' (محذوفة)':''}</td><td>${x.effCharge?money(x.effCharge):'—'}</td><td>${x.effPaid?money(x.effPaid):'—'}</td><td>${money(x.balance)}</td></tr>`).join('')}</tbody><tfoot><tr><th colspan="2">إجمالي الفترة</th><th>${money(c)}</th><th>${money(p)}</th><th>${money(c-p)}</th></tr></tfoot></table></div>`;
+    return `<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>البيان</th><th>مستحق</th><th>مدفوع</th><th>الرصيد</th><th>الإيصال</th></tr></thead><tbody>${rows.map(x=>`<tr class="${x.voided?'voided':''}"><td>${fmtDay(x.date)}</td><td>${esc(x.label)}${x.voided?' (محذوفة)':''}</td><td>${x.effCharge?money(x.effCharge):'—'}</td><td>${x.effPaid?money(x.effPaid):'—'}</td><td>${money(x.balance)}</td><td>${x.receiptId&&!x.voided?`<button class="btn secondary" type="button" data-open-receipt="${esc(x.receiptId)}">عرض / طباعة</button>`:'—'}</td></tr>`).join('')}</tbody><tfoot><tr><th colspan="2">إجمالي الفترة</th><th>${money(c)}</th><th>${money(p)}</th><th>${money(c-p)}</th><th></th></tr></tfoot></table></div>`;
+  }
+  async function patientReceiptPage(receiptId,backPatientId=null){
+    if(!isRole('admin','secretary','accountant')){setPage('إيصال التحصيل','<div class="notice error">غير مصرح لك بعرض إيصالات التحصيل.</div>');return;}
+    setPage('إيصال التحصيل','<div class="empty">جارٍ تحميل الإيصال…</div>');
+    const receiptResult=await sb.from('patient_account_receipts').select('id,patient_id,calendar_appointment_id,amount,payment_method,payment_date,notes,created_at').eq('id',receiptId).maybeSingle();
+    if(receiptResult.error||!receiptResult.data){setPage('إيصال التحصيل',`<div class="notice error">تعذر تحميل الإيصال: ${esc(receiptResult.error?.message||'الإيصال غير موجود أو لا تملك صلاحية عرضه')}</div>`);return;}
+    const receipt=receiptResult.data;
+    const [patientResult,allocResult]=await Promise.all([
+      sb.from('patients').select('id,file_number,full_name,phone').eq('id',receipt.patient_id).maybeSingle(),
+      sb.from('patient_account_payment_allocations').select('id,charge_id,amount,voided_at').eq('receipt_id',receiptId).is('voided_at',null)
+    ]);
+    if(patientResult.error||!patientResult.data||allocResult.error){setPage('إيصال التحصيل',`<div class="notice error">تعذر تحميل بيانات الإيصال: ${esc(patientResult.error?.message||allocResult.error?.message||'تعذر قراءة بيانات المريض')}</div>`);return;}
+    const patient=patientResult.data,allocations=allocResult.data||[];
+    const method={cash:'نقدي',card:'بطاقة',transfer:'تحويل',other:'أخرى'};
+    const fmt=v=>v?new Date(v).toLocaleString('ar-EG',{timeZone:'Africa/Cairo',dateStyle:'full',timeStyle:'short'}):'—';
+    const receiptNo='SANAD-'+receipt.id.slice(-8).toUpperCase();
+    const body=`<div class="manager-card" id="receiptCard"><div style="text-align:center"><h2 style="margin:0">مركز سند للعلاج الطبيعي والتأهيل</h2><h3 style="margin:8px 0">إيصال تحصيل مديونية</h3><div class="muted small">رقم الإيصال: ${esc(receiptNo)}</div></div><hr><div class="info-grid">${info('اسم المريض',esc(patient.full_name))}${info('رقم الملف',esc(patient.file_number??'—'))}${info('رقم الهاتف',esc(patient.phone||'—'))}${info('تاريخ ووقت التحصيل',esc(fmt(receipt.payment_date)))}${info('طريقة الدفع',esc(method[receipt.payment_method]||receipt.payment_method))}${info('مبلغ التحصيل',money(receipt.amount))}</div>${receipt.notes?`<p><strong>ملاحظات:</strong> ${esc(receipt.notes)}</p>`:''}${allocations.length?`<h4>توزيع مبلغ التحصيل</h4><div class="table-wrap"><table><thead><tr><th>معرف المديونية</th><th>المبلغ المخصص</th></tr></thead><tbody>${allocations.map(x=>`<tr><td>${esc(x.charge_id)}</td><td>${money(x.amount)}</td></tr>`).join('')}</tbody><tfoot><tr><th>الإجمالي المخصص</th><th>${money(allocations.reduce((n,x)=>n+Number(x.amount||0),0))}</th></tr></tfoot></table></div>`:''}<p style="margin-top:24px;text-align:center">تم استلام المبلغ الموضح أعلاه لصالح مركز سند.</p><div style="display:flex;justify-content:space-between;margin-top:34px"><span>توقيع المستلم: ................</span><span>ختم المركز: ................</span></div></div>`;
+    setPage('إيصال التحصيل',body,`<button class="btn" id="printReceiptBtn" type="button">طباعة الإيصال / حفظ PDF</button><button class="btn secondary" id="backReceiptBtn" type="button">العودة لملف المريض</button>`);
+    $('printReceiptBtn')?.addEventListener('click',()=>printPatientReceipt(receipt,patient,receiptNo));
+    $('backReceiptBtn')?.addEventListener('click',()=>backPatientId?patientFilePage(backPatientId):patientDebtsPage());
+  }
+  function printPatientReceipt(receipt,patient,receiptNo){
+    document.getElementById('printRoot')?.remove();
+    const root=document.createElement('div');root.id='printRoot';
+    const method={cash:'نقدي',card:'بطاقة',transfer:'تحويل',other:'أخرى'};
+    const fmt=v=>v?new Date(v).toLocaleString('ar-EG',{timeZone:'Africa/Cairo',dateStyle:'full',timeStyle:'short'}):'—';
+    root.innerHTML=`<div style="max-width:760px;margin:auto"><h2 style="text-align:center;margin:0">مركز سند للعلاج الطبيعي والتأهيل</h2><h3 style="text-align:center;margin:8px 0">إيصال تحصيل مديونية</h3><p style="text-align:center">رقم الإيصال: <strong>${esc(receiptNo)}</strong></p><hr><p>اسم المريض: <strong>${esc(patient.full_name)}</strong></p><p>رقم الملف: ${esc(patient.file_number??'—')} — الهاتف: ${esc(patient.phone||'—')}</p><p>تاريخ ووقت التحصيل: ${esc(fmt(receipt.payment_date))}</p><p>طريقة الدفع: ${esc(method[receipt.payment_method]||receipt.payment_method)}</p><h2 style="text-align:center;margin:28px 0">المبلغ المستلم: ${money(receipt.amount)}</h2>${receipt.notes?`<p>ملاحظات: ${esc(receipt.notes)}</p>`:''}<p style="margin-top:36px">توقيع المستلم: ............................ <span style="float:left">ختم المركز: ............................</span></p></div>`;
+    document.body.appendChild(root);
+    const cleanup=()=>root.remove();
+    window.addEventListener('afterprint',cleanup,{once:true});
+    setTimeout(cleanup,120000);
+    window.print();
   }
   function printStatement(patient,rows,fmtDay,range,totals){
     document.getElementById('printRoot')?.remove();
@@ -661,6 +693,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       const current=()=>{const from=$('stmtFrom').value,to=$('stmtTo').value,type=$('stmtType').value;return all.filter(x=>{const d=x.date?cairoDateString(new Date(x.date)):'';return (type==='all'||x.type===type)&&(!from||(d&&d>=from))&&(!to||(d&&d<=to));});};
       const draw=()=>{$('stmtBody').innerHTML=statementTableHtml(current(),fmtDay);};
       ['stmtFrom','stmtTo','stmtType'].forEach(id=>$(id).addEventListener('change',draw));draw();
+      $('stmtBody').addEventListener('click',e=>{const b=e.target.closest('[data-open-receipt]');if(b)patientReceiptPage(b.dataset.openReceipt,patientId);});
       $('stmtPrint').addEventListener('click',()=>{const filtered=current();const filteredCharge=filtered.reduce((n,x)=>n+x.effCharge,0),filteredPaid=filtered.reduce((n,x)=>n+x.effPaid,0);printStatement(p,filtered,fmtDay,{from:$('stmtFrom').value,to:$('stmtTo').value},{totalCharge:filteredCharge,totalPaid:filteredPaid,balance:filteredCharge-filteredPaid});});
       $('sectionBody').querySelectorAll('[data-file-void-payment]').forEach(b=>b.addEventListener('click',()=>voidPackagePaymentById(b.dataset.fileVoidPayment,()=>patientFilePage(patientId))));
       $('sectionBody').querySelectorAll('[data-file-void-entry]').forEach(b=>b.addEventListener('click',()=>voidFinancialEntry(b.dataset.fileVoidEntry,()=>patientFilePage(patientId))));
@@ -1640,8 +1673,9 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       const result=await sb.rpc('sanad_record_patient_debt_payment',{p_patient_id:patientId,p_amount:amount,p_payment_method:method,p_payment_date:paymentDate,p_notes:String(fd.get('notes')||'').trim()||null});
       submit.disabled=false;
       if(result.error){msg($('debtPaymentMessage'),'تعذر تسجيل السداد: '+result.error.message);return;}
-      msg($('debtPaymentMessage'),'تم تسجيل السداد وتحديث رصيد المريض.','success');
-      await patientDebtsPage();
+      const receiptId=typeof result.data==='string'?result.data:(Array.isArray(result.data)?result.data[0]:null);
+      if(!receiptId){msg($('debtPaymentMessage'),'تم تسجيل السداد، لكن تعذر استرجاع رقم الإيصال. افتح ملف المريض للوصول إلى التحصيلات.','success');await patientDebtsPage();return;}
+      await patientReceiptPage(receiptId,patientId);
     });
   }
 
