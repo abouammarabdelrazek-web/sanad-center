@@ -529,7 +529,27 @@ tr.voided td{opacity:.55;text-decoration:line-through}
   function statementTableHtml(rows,fmtDay){
     if(!rows.length)return '<div class="empty">لا توجد حركات في هذه الفترة.</div>';
     const c=rows.reduce((n,x)=>n+x.effCharge,0),p=rows.reduce((n,x)=>n+x.effPaid,0);
-    return `<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>البيان</th><th>مستحق</th><th>مدفوع</th><th>الرصيد</th><th>الإيصال</th></tr></thead><tbody>${rows.map(x=>`<tr class="${x.voided?'voided':''}"><td>${fmtDay(x.date)}</td><td>${esc(x.label)}${x.voided?' (محذوفة)':''}</td><td>${x.effCharge?money(x.effCharge):'—'}</td><td>${x.effPaid?money(x.effPaid):'—'}</td><td>${money(x.balance)}</td><td>${x.receiptId&&!x.voided?`<button class="btn secondary" type="button" data-open-receipt="${esc(x.receiptId)}">عرض / طباعة</button>`:'—'}</td></tr>`).join('')}</tbody><tfoot><tr><th colspan="2">إجمالي الفترة</th><th>${money(c)}</th><th>${money(p)}</th><th>${money(c-p)}</th><th></th></tr></tfoot></table></div>`;
+    return `<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>البيان</th><th>مستحق</th><th>مدفوع</th><th>الرصيد</th><th>الإيصال</th><th>تصحيح التحصيل</th></tr></thead><tbody>${rows.map(x=>`<tr class="${x.voided?'voided':''}"><td>${fmtDay(x.date)}</td><td>${esc(x.label)}${x.voided?' (محذوفة)':''}</td><td>${x.effCharge?money(x.effCharge):'—'}</td><td>${x.effPaid?money(x.effPaid):'—'}</td><td>${money(x.balance)}</td><td>${x.receiptId&&!x.voided?`<button class="btn secondary" type="button" data-open-receipt="${esc(x.receiptId)}">عرض / طباعة</button>`:'—'}</td><td>${x.allocationId&&!x.voided&&isRole('admin','secretary')?`<button class="btn secondary" type="button" data-correct-payment="${esc(x.allocationId)}" data-correct-amount="${Number(x.paid||0)}" data-payment-method="${esc(x.paymentMethod||'cash')}">تصحيح المبلغ</button>`:'—'}</td></tr>`).join('')}</tbody><tfoot><tr><th colspan="2">إجمالي الفترة</th><th>${money(c)}</th><th>${money(p)}</th><th>${money(c-p)}</th><th></th><th></th></tr></tfoot></table></div>`;
+  }
+  async function correctPatientPaymentForm(allocationId,patientId,currentAmount,currentMethod='cash'){
+    if(!isRole('admin','secretary')){alert('تصحيح التحصيل متاح للمدير والسكرتارية فقط.');return;}
+    const methodOptions=[['cash','نقدي'],['card','بطاقة'],['transfer','تحويل'],['other','أخرى']].map(([v,l])=>`<option value="${v}" ${v===currentMethod?'selected':''}>${l}</option>`).join('');
+    const body=`<div class="manager-card"><p>المبلغ المسجل حاليًا: <strong>${money(currentAmount)}</strong></p><p class="muted small">سيتم عكس التحصيل الأصلي محاسبيًا ثم تسجيل تحصيل جديد بالمبلغ الصحيح، مع الاحتفاظ بالإيصال القديم وسجل التصحيح.</p><form id="correctPatientPaymentForm"><div class="field"><label for="correctPaymentAmount">المبلغ الصحيح الذي تم تحصيله فعليًا (جنيه)</label><input id="correctPaymentAmount" name="amount" type="number" min="0.01" step="0.01" value="${Number(currentAmount).toFixed(2)}" required></div><div class="field"><label for="correctPaymentMethod">طريقة الدفع الصحيحة</label><select id="correctPaymentMethod" name="method" required>${methodOptions}</select></div><div class="field"><label for="correctPaymentReason">سبب التصحيح</label><textarea id="correctPaymentReason" name="reason" rows="3" minlength="3" required placeholder="مثال: تم إدخال 25 بدلًا من 250"></textarea></div><div id="correctPaymentMessage" aria-live="polite"></div><div class="toolbar"><button class="btn" type="submit">تأكيد التصحيح</button><button class="btn secondary" id="cancelCorrectPayment" type="button">إلغاء</button></div></form></div>`;
+    setPage('تصحيح مبلغ تحصيل',body,'<button class="btn secondary" id="backCorrectPayment" type="button">العودة لملف المريض</button>');
+    $('backCorrectPayment')?.addEventListener('click',()=>patientFilePage(patientId));
+    $('cancelCorrectPayment')?.addEventListener('click',()=>patientFilePage(patientId));
+    $('correctPatientPaymentForm')?.addEventListener('submit',async e=>{
+      e.preventDefault();
+      const amount=Number($('correctPaymentAmount').value),method=$('correctPaymentMethod').value,reason=$('correctPaymentReason').value.trim();
+      if(!Number.isFinite(amount)||amount<=0){msg($('correctPaymentMessage'),'أدخل مبلغًا صحيحًا أكبر من صفر.');return;}
+      if(reason.length<3){msg($('correctPaymentMessage'),'اكتب سبب التصحيح بوضوح.');return;}
+      if(!confirm('تأكيد مهم: هل تم استلام المبلغ الجديد فعليًا من المريض؟ سيتم عكس الحركة القديمة وتسجيل الحركة الجديدة مع الاحتفاظ بكليهما في السجل.'))return;
+      const btn=e.currentTarget.querySelector('button[type="submit"]');btn.disabled=true;
+      const result=await sb.rpc('sanad_correct_patient_payment',{p_allocation_id:allocationId,p_new_amount:amount,p_payment_method:method,p_reason:reason});
+      if(result.error){btn.disabled=false;msg($('correctPaymentMessage'),'تعذر تصحيح التحصيل: '+result.error.message);return;}
+      alert('تم تصحيح التحصيل بنجاح. تم الاحتفاظ بالحركة القديمة وتسجيل التحصيل الجديد.');
+      await patientFilePage(patientId);
+    });
   }
   async function patientReceiptPage(receiptId,backPatientId=null){
     if(!isRole('admin','secretary','accountant')){setPage('إيصال التحصيل','<div class="notice error">غير مصرح لك بعرض إيصالات التحصيل.</div>');return;}
@@ -661,7 +681,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
         if(allocations.length){
           allocations.forEach(allocation=>{
             const charge=chargeById[allocation.charge_id];
-            stmtRows.push({date:receipt.payment_date,label:'تحصيل مديونية — '+(charge?.department_name||'قسم غير محدد')+(receipt.notes?' — '+receipt.notes:''),type:'payment',charge:0,paid:Number(allocation.amount||0),voided:false,receiptId:receipt.id,allocationId:allocation.id});
+            stmtRows.push({date:receipt.payment_date,label:'تحصيل مديونية — '+(charge?.department_name||'قسم غير محدد')+(receipt.notes?' — '+receipt.notes:''),type:'payment',charge:0,paid:Number(allocation.amount||0),voided:false,receiptId:receipt.id,allocationId:allocation.id,paymentMethod:receipt.payment_method});
           });
         }else{
           stmtRows.push({date:receipt.payment_date,label:'إيصال تحصيل غير موزع — القيمة الأصلية '+money(receipt.amount)+' (غير محسوب ضمن المدفوع)'+(receipt.notes?' — '+receipt.notes:''),type:'payment',charge:0,paid:0,voided:false,receiptId:receipt.id,unallocated:Number(receipt.amount||0)});
@@ -693,7 +713,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       const current=()=>{const from=$('stmtFrom').value,to=$('stmtTo').value,type=$('stmtType').value;return all.filter(x=>{const d=x.date?cairoDateString(new Date(x.date)):'';return (type==='all'||x.type===type)&&(!from||(d&&d>=from))&&(!to||(d&&d<=to));});};
       const draw=()=>{$('stmtBody').innerHTML=statementTableHtml(current(),fmtDay);};
       ['stmtFrom','stmtTo','stmtType'].forEach(id=>$(id).addEventListener('change',draw));draw();
-      $('stmtBody').addEventListener('click',e=>{const b=e.target.closest('[data-open-receipt]');if(b)patientReceiptPage(b.dataset.openReceipt,patientId);});
+      $('stmtBody').addEventListener('click',e=>{const c=e.target.closest('[data-correct-payment]');if(c)correctPatientPaymentForm(c.dataset.correctPayment,patientId,Number(c.dataset.correctAmount),c.dataset.paymentMethod);const b=e.target.closest('[data-open-receipt]');if(b)patientReceiptPage(b.dataset.openReceipt,patientId);});
       $('stmtPrint').addEventListener('click',()=>{const filtered=current();const filteredCharge=filtered.reduce((n,x)=>n+x.effCharge,0),filteredPaid=filtered.reduce((n,x)=>n+x.effPaid,0);printStatement(p,filtered,fmtDay,{from:$('stmtFrom').value,to:$('stmtTo').value},{totalCharge:filteredCharge,totalPaid:filteredPaid,balance:filteredCharge-filteredPaid});});
       $('sectionBody').querySelectorAll('[data-file-void-payment]').forEach(b=>b.addEventListener('click',()=>voidPackagePaymentById(b.dataset.fileVoidPayment,()=>patientFilePage(patientId))));
       $('sectionBody').querySelectorAll('[data-file-void-entry]').forEach(b=>b.addEventListener('click',()=>voidFinancialEntry(b.dataset.fileVoidEntry,()=>patientFilePage(patientId))));
