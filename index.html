@@ -993,17 +993,25 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       const patientId=$('apptForm').elements.patient_id.value,departmentId=$('apptForm').elements.department_id.value;
       const sameExisting=!!existing && patientId===existing.patient_id && departmentId===existing.department_id;
       if(sameExisting)$('durationHint').textContent='المدة المحفوظة لهذا الموعد.';
-      if(!patientId||!departmentId)return;
+      if(!patientId||!departmentId){
+        if(!sameExisting){$('apptForm').elements.duration.value='';$('durationHint').textContent='اختر المريض والقسم لتحميل المدة أو أدخلها يدويًا.';}
+        return;
+      }
       const [setting,dept]=await Promise.all([
         sb.from('patient_department_settings').select('duration_minutes,session_price').eq('patient_id',patientId).eq('department_id',departmentId).maybeSingle(),
         sb.from('departments').select('default_duration_minutes').eq('id',departmentId).maybeSingle()
       ]);
-      if(setting.error||dept.error){$('durationHint').textContent='تعذر تحميل المدة الافتراضية؛ أدخلها يدويًا.';return;}
+      if(setting.error||dept.error){
+        if(!sameExisting)$('apptForm').elements.duration.value='';
+        $('durationHint').textContent='تعذر تحميل المدة الافتراضية؛ أدخلها يدويًا.';
+        return;
+      }
       const duration=setting.data?.duration_minutes??dept.data?.default_duration_minutes;
       if(!sameExisting&&duration!=null&&duration!==''){
         $('apptForm').elements.duration.value=duration;
         $('durationHint').textContent='المدة المقترحة: '+duration+' دقيقة. يمكنك تعديلها لهذا الموعد.';
       }else if(!sameExisting){
+        $('apptForm').elements.duration.value='';
         $('durationHint').textContent='لا توجد مدة افتراضية لهذا القسم/المريض. أدخل المدة يدويًا.';
       }
       const priceInput=$('apptForm').elements.session_price;
