@@ -1405,15 +1405,40 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     const used=Number(p.used_sessions||0);
     const sessionValue=used*Number(p.session_price||0);
     const refund=Math.max(0,Math.round((paid-sessionValue)*100)/100);
-    const lines=[
-      'سيتم إنهاء الباقة العلاجية وتثبيت تسويتها مع الاحتفاظ بكل الدفعات والجلسات في السجل.',
-      'إجمالي المدفوع الفعلي للباقة: '+money(paid),
-      'الكشف خدمة مستقلة ولا يُخصم من الباقة: 0.00 ج.م',
-      'الجلسات العلاجية غير الملغاة: '+used+' × '+money(p.session_price)+' = '+money(sessionValue),
-      'المبلغ المستحق رده: '+money(refund)
-    ];
-    if(!confirm(lines.join('\n')+'\n\nهل تريد متابعة التسوية؟'))return;
-    const reason=prompt('اكتب سبب تسوية وإلغاء الباقة (مطلوب):');
+    setPage('معاينة تسوية الباقة',`
+      <div class="notice">هذه معاينة فقط. لم يتم إلغاء الباقة أو تسجيل رد مالي أو تعديل أي رصيد. لن يحدث أي تغيير إلا عند الضغط على «تنفيذ التسوية» ثم إكمال التأكيدات.</div>
+      <div class="manager-card">
+        <strong>${esc(p.patient_name)} — ${esc(p.package_name)}</strong>
+        <div class="info-grid" style="margin-top:14px">
+          <div class="info-item"><small>حالة الباقة</small><div>${p.status==='active'?'نشطة':esc(p.status)}</div></div>
+          <div class="info-item"><small>عدد الجلسات الكلي</small><div>${esc(p.total_sessions)}</div></div>
+          <div class="info-item"><small>المدفوع الفعلي بعد استبعاد الدفعات الملغاة</small><div><strong>${money(paid)}</strong></div></div>
+          <div class="info-item"><small>الجلسات العلاجية المستخدمة غير الملغاة</small><div>${used} جلسة</div></div>
+          <div class="info-item"><small>قيمة الجلسات المستخدمة</small><div>${money(sessionValue)}</div></div>
+          <div class="info-item"><small>رسوم الكشف المستقل</small><div>0.00 ج.م — لا تدخل في تسوية الباقة</div></div>
+        </div>
+        <div class="analysis-note"><strong>المبلغ المتوقع رده: ${money(refund)}</strong><br>الحساب: المدفوع الفعلي ${money(paid)} − قيمة الجلسات المستخدمة ${money(sessionValue)}.</div>
+      </div>
+      <div class="toolbar">
+        <button class="btn danger" id="executePackageSettlement" type="button">تنفيذ التسوية وإلغاء الباقة</button>
+        <button class="btn ghost" id="backPackageSettlement" type="button">رجوع دون تغيير</button>
+      </div>
+      <p class="muted small">تنفيذ التسوية نهائي من ناحية التشغيل: سيحوّل حالة الباقة إلى «ملغاة» ويحفظ سجل التسوية. وإذا كان هناك مبلغ مستحق، لن يُسجل الرد إلا بعد إدخال بياناته وتأكيد أنك نفذته فعليًا.</p>
+    `);
+    $('backPackageSettlement')?.addEventListener('click',packagesPage);
+    $('executePackageSettlement')?.addEventListener('click',()=>executePackageSettlement(packageId));
+  }
+
+  async function executePackageSettlement(packageId){
+    if(!isRole('admin','secretary'))return;
+    const {data:p,error}=await sb.from('sanad_package_summary').select('package_id,patient_name,package_name,session_price,total_sessions,used_sessions,total_paid,status').eq('package_id',packageId).maybeSingle();
+    if(error||!p){alert('تعذر تحديث بيانات الباقة قبل التنفيذ: '+(error?.message||'غير موجودة'));return;}
+    if(p.status!=='active'){alert('لم تعد الباقة نشطة. حدّث الصفحة وراجع حالتها.');await packagesPage();return;}
+    const paid=Number(p.total_paid||0);
+    const used=Number(p.used_sessions||0);
+    const sessionValue=used*Number(p.session_price||0);
+    const refund=Math.max(0,Math.round((paid-sessionValue)*100)/100);
+    const reason=prompt('أنت على وشك إلغاء الباقة وتثبيت تسويتها. اكتب سبب التسوية (مطلوب):');
     if(reason===null)return;
     if(reason.trim().length<3){alert('سبب التسوية يجب ألا يقل عن 3 أحرف.');return;}
     let method=null,reference=null,proof=null;
@@ -1422,22 +1447,22 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       if(methodLabel===null)return;
       method=methodLabel.trim().toLowerCase();
       if(!['cash','card','transfer','other'].includes(method)){alert('طريقة الرد غير صحيحة.');return;}
-      reference=prompt('الرقم المرجعي لعملية الرد (اختياري، اضغط إلغاء/اتركه فارغًا لإدخال وصف إثبات):');
+      reference=prompt('الرقم المرجعي لعملية الرد (اختياري، اتركه فارغًا لإدخال وصف إثبات):');
       if(reference===null)return;
       if(!reference.trim()){
         proof=prompt('اكتب وصف إثبات رد المبلغ (5 أحرف على الأقل):');
         if(proof===null)return;
         if(proof.trim().length<5){alert('وصف الإثبات يجب ألا يقل عن 5 أحرف.');return;}
       }
-      if(!confirm('تأكيد تسجيل رد مبلغ '+money(refund)+' بطريقة '+({cash:'نقدي',card:'بطاقة',transfer:'تحويل',other:'أخرى'}[method])+'؟ لا تؤكد إلا بعد تنفيذ الرد فعليًا.'))return;
+      if(!confirm('تأكيد نهائي: هل تم رد مبلغ '+money(refund)+' فعليًا بطريقة '+({cash:'نقدي',card:'بطاقة',transfer:'تحويل',other:'أخرى'}[method])+'؟\n\nسيتم إلغاء الباقة وتسجيل حركة الرد.'))return;
     }else if(!confirm('لا يوجد مبلغ مستحق للرد. سيتم توثيق التسوية وإلغاء الباقة دون حركة مالية. هل تريد المتابعة؟'))return;
-    const buttons=$('sectionBody').querySelectorAll('[data-package-settle]');
-    buttons.forEach(x=>x.disabled=true);
+    const button=$('executePackageSettlement');
+    if(button)button.disabled=true;
     const result=await sb.rpc('sanad_settle_patient_package',{
       p_package_id:packageId,p_reason:reason.trim(),p_refund_method:method,
       p_refund_reference:reference?.trim()||null,p_proof_notes:proof?.trim()||null
     });
-    if(result.error){buttons.forEach(x=>x.disabled=false);alert('تعذر تسوية الباقة: '+result.error.message);return;}
+    if(result.error){if(button)button.disabled=false;alert('تعذر تسوية الباقة: '+result.error.message);return;}
     alert('تم تسجيل تسوية الباقة بنجاح. المبلغ المسترد: '+money(refund)+'.');
     await packagesPage();
   }
