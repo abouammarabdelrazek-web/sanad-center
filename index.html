@@ -1402,15 +1402,14 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     if(error||!p){alert('تعذر تحميل بيانات الباقة: '+(error?.message||'غير موجودة'));return;}
     if(p.status==='cancelled'){alert('هذه الباقة ملغاة أو تمت تسويتها بالفعل.');return;}
     const paid=Number(p.total_paid||0);
-    const assessmentUsed=p.assessment_completed_at?Number(p.assessment_fee||0):0;
     const used=Number(p.used_sessions||0);
     const sessionValue=used*Number(p.session_price||0);
-    const refund=Math.max(0,Math.round((paid-assessmentUsed-sessionValue)*100)/100);
+    const refund=Math.max(0,Math.round((paid-sessionValue)*100)/100);
     const lines=[
-      'سيتم إنهاء الباقة وتثبيت تسويتها مع الاحتفاظ بكل الدفعات والجلسات في السجل.',
-      'إجمالي المدفوع الفعلي: '+money(paid),
-      'قيمة الكشف المستهلك'+(p.assessment_completed_at?' (تم بالفعل)':' (لم يتم)')+': '+money(assessmentUsed),
-      'الجلسات غير الملغاة: '+used+' × '+money(p.session_price)+' = '+money(sessionValue),
+      'سيتم إنهاء الباقة العلاجية وتثبيت تسويتها مع الاحتفاظ بكل الدفعات والجلسات في السجل.',
+      'إجمالي المدفوع الفعلي للباقة: '+money(paid),
+      'الكشف خدمة مستقلة ولا يُخصم من الباقة: 0.00 ج.م',
+      'الجلسات العلاجية غير الملغاة: '+used+' × '+money(p.session_price)+' = '+money(sessionValue),
       'المبلغ المستحق رده: '+money(refund)
     ];
     if(!confirm(lines.join('\n')+'\n\nهل تريد متابعة التسوية؟'))return;
@@ -1458,7 +1457,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     if(error){setPage('سجل الدفعات',`<div class="notice error">تعذر تحميل الدفعات: ${esc(error.message)}</div>`);return;}
     const {data:settlement,error:settlementError}=await sb.from('package_settlements').select('amount_paid,consumed_assessment_fee,consumed_sessions,consumed_session_value,refundable_amount,refund_method,refund_reference,proof_notes,reason,settled_at,financial_entry_id').eq('package_id',packageId).maybeSingle();
     if(settlementError){setPage('سجل الدفعات',`<div class="notice error">تعذر تحميل سجل التسوية: ${esc(settlementError.message)}</div>`);return;}
-    const settlementHtml=settlement?`<div class="manager-card"><strong>تسوية الباقة</strong><p>المدفوع الفعلي: ${money(settlement.amount_paid)} · قيمة الكشف المستهلك: ${money(settlement.consumed_assessment_fee)} · الجلسات المستهلكة: ${settlement.consumed_sessions} ( ${money(settlement.consumed_session_value)} )</p><p><strong>المبلغ المسترد: ${money(settlement.refundable_amount)}</strong> · ${settlement.refund_method?({cash:'نقدي',card:'بطاقة',transfer:'تحويل',other:'أخرى'}[settlement.refund_method]||esc(settlement.refund_method)):'لا يوجد رد مالي'}</p><p class="muted small">السبب: ${esc(settlement.reason)} · التاريخ: ${dateTime(settlement.settled_at)} · المرجع: ${esc(settlement.refund_reference||'—')} · إثبات الرد: ${esc(settlement.proof_notes||'—')}</p></div>`:'';
+    const settlementHtml=settlement?`<div class="manager-card"><strong>تسوية الباقة</strong><p>المدفوع الفعلي: ${money(settlement.amount_paid)} · الكشف المستقل غير محسوب على الباقة: ${money(0)} · الجلسات المستهلكة: ${settlement.consumed_sessions} ( ${money(settlement.consumed_session_value)} )</p><p><strong>المبلغ المسترد: ${money(settlement.refundable_amount)}</strong> · ${settlement.refund_method?({cash:'نقدي',card:'بطاقة',transfer:'تحويل',other:'أخرى'}[settlement.refund_method]||esc(settlement.refund_method)):'لا يوجد رد مالي'}</p><p class="muted small">السبب: ${esc(settlement.reason)} · التاريخ: ${dateTime(settlement.settled_at)} · المرجع: ${esc(settlement.refund_reference||'—')} · إثبات الرد: ${esc(settlement.proof_notes||'—')}</p></div>`:'';
     const rows=data||[];setPage('سجل دفعات الباقة',settlementHtml+`<div class="manager-card"><strong>${esc(p.patient_name)} — ${esc(p.package_name)}</strong><p class="muted small">قيمة الباقة: ${money(p.package_total)} · المدفوع الفعلي: ${money(p.total_paid)} · المتبقي: ${money(p.remaining_amount)}</p></div>${rows.length?`<div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>المبلغ</th><th>طريقة الدفع</th><th>المرجع</th><th>الحالة / سبب الإلغاء</th><th>الإجراءات</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${dateTime(x.payment_date)}</td><td>${money(x.amount)}</td><td>${({cash:'نقدي',card:'بطاقة',transfer:'تحويل',other:'أخرى'})[x.payment_method]||esc(x.payment_method)}</td><td>${esc(x.reference_number||'—')}</td><td>${x.voided_at?`<span class="badge danger">ملغاة</span><div class="muted small">${esc(x.void_reason||'—')}</div><div class="muted small">${dateTime(x.voided_at)}</div>`:'<span class="badge">سارية</span>'}</td><td>${!x.voided_at?`<button class="btn danger" type="button" data-void-package-payment="${esc(x.id)}">حذف الدفعة</button>`:'—'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد دفعات مسجلة لهذه الباقة.</div>'}`, '<button class="btn secondary" id="backPackages" type="button">رجوع للباقات</button>');
     attachTableSearch('sectionBody','ابحث في سجل دفعات الباقة…');
     $('backPackages').addEventListener('click',packagesPage);
