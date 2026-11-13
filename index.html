@@ -1266,7 +1266,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     const groups=[
       {label:'المرضى والملفات الطبية',items:['patients','patient_medical_records','patient_departments','patient_department_settings']},
       {label:'المواعيد والجلسات',items:['appointments','therapy_sessions','sanad_calendar_appointments','sanad_calendar_status_history']},
-      {label:'الباقات وحسابات المرضى',items:['patient_packages','package_session_usage','package_payments','sanad_package_usage_approvals','patient_account_charges','patient_account_receipts','patient_account_payment_allocations','patient_session_refunds']},
+      {label:'الباقات وحسابات المرضى',items:['patient_packages','package_session_usage','package_payments','package_settlements','sanad_package_usage_approvals','patient_account_charges','patient_account_receipts','patient_account_payment_allocations','patient_payment_corrections','patient_session_refunds']},
       {label:'الإيرادات والمصروفات والخزينة',items:['financial_entries','financial_closings','treasury_accounts']},
       {label:'الموظفون والأقسام والصلاحيات',items:['departments','sanad_employees','sanad_employee_departments','staff_profiles','staff_department_access','sanad_monthly_schedule_reviews']},
       {label:'التقارير والملخصات',items:['sanad_appointment_followup','sanad_department_patient_overview','sanad_financial_daily_summary','sanad_financial_monthly_summary','sanad_management_daily_overview','sanad_management_monthly_overview','sanad_management_package_overview','sanad_package_summary','sanad_patient_account_receipts','sanad_patient_account_statement','sanad_patient_account_summary','sanad_patient_followup','sanad_therapist_work_summary','sanad_treasury_balances']},
@@ -1502,7 +1502,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
   async function financesPage(){
     if(!isRole('admin','accountant')){setPage('الإيرادات والمصروفات','<div class="notice error">قسم المالية متاح للمحاسب والمدير الإداري فقط.</div>');return;}
     const year=Number(state.financeYear)||new Date().getFullYear();const month=Number(state.financeMonth);
-    setPage('الإيرادات والمصروفات','<div class="empty">جارٍ تحميل التحليلات المالية…</div>','<button class="btn" id="addFinanceBtn" type="button">+ تسجيل حركة مالية</button>');
+    setPage('الإيرادات والمصروفات','<div class="empty">جارٍ تحميل التحليلات المالية…</div>',isAdmin()?'<button class="btn" id="addFinanceBtn" type="button">+ تسجيل حركة مالية</button>':'');
     $('addFinanceBtn')?.addEventListener('click',financeForm);
     const startDate=cairoDayBounds(`${year}-01-01`).start,endDate=cairoDayBounds(`${year+1}-01-01`).start;
     let rows=[],offset=0,hasMore=true;
