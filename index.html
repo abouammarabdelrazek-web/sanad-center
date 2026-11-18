@@ -1664,9 +1664,18 @@ tr.voided td{opacity:.55;text-decoration:line-through}
         <div class="field full"><label for="closingNotes">ملاحظات المطابقة (اختياري)</label><textarea id="closingNotes" rows="2" placeholder="مثال: تمت مطابقة النقدية وإيصالات التحويل"></textarea></div>
       </div>
       <div class="toolbar"><button class="btn" id="previewFinancialClose" type="button">معاينة اليوم</button></div>
-      <div id="financialClosePreview" aria-live="polite"><div class="empty">اختر التاريخ والنطاق ثم اضغط «معاينة اليوم».</div></div>`);
+      <div id="financialClosePreview" aria-live="polite"><div class="empty">اختر التاريخ والنطاق ثم اضغط «معاينة اليوم».</div></div>
+      <h4 style="margin-top:24px">سجل الإقفالات السابقة</h4><div id="financialClosingHistory"><div class="empty">جارٍ تحميل سجل الإقفالات…</div></div>`);
     const previewBtn=$('previewFinancialClose'),host=$('financialClosePreview');
     previewBtn.addEventListener('click',()=>loadFinancialClosePreview());
+    loadFinancialClosingHistory();
+    async function loadFinancialClosingHistory(){
+      const history=$('financialClosingHistory');if(!history)return;
+      const {data,error}=await sb.from('financial_closings').select('id,closing_date,department_id,total_income,total_expenses,net_total,entries_count,closed_at,notes').order('closed_at',{ascending:false}).limit(50);
+      if(error){history.innerHTML=`<div class="notice error">تعذر تحميل سجل الإقفالات: ${esc(error.message)}</div>`;return;}
+      const rows=data||[];
+      history.innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>تاريخ الإقفال</th><th>النطاق</th><th>الإيرادات</th><th>المصروفات</th><th>الصافي</th><th>عدد القيود</th><th>وقت الاعتماد</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.closing_date)}</td><td>${esc(x.department_id?deptName(x.department_id):'كل المركز')}</td><td>${money(x.total_income)}</td><td>${money(x.total_expenses)}</td><td>${money(x.net_total)}</td><td>${x.entries_count}</td><td>${dateTime(x.closed_at)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد إقفالات مالية مسجلة حتى الآن.</div>';
+    }
     async function loadFinancialClosePreview(){
       const date=$('closingDate').value,dept=$('closingDepartment').value||null;
       if(!date){msg(host,'اختر تاريخ الإقفال.');return;}
@@ -1697,7 +1706,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
           const {data:closeId,error:closeError}=await sb.rpc('sanad_close_financial_day',{p_closing_date:currentDate,p_department_id:currentDept,p_notes:notes||null});
           if(closeError){msg(host,'تعذر اعتماد الإقفال: '+closeError.message);btn.disabled=false;btn.textContent='اعتماد الإقفال المالي';return;}
           host.insertAdjacentHTML('beforeend',`<div class="notice success">تم اعتماد الإقفال بنجاح. رقم العملية: ${esc(closeId||'—')}</div>`);
-          btn.remove();
+          btn.remove();await loadFinancialClosingHistory();
         });
       }catch(e){host.innerHTML=`<div class="notice error">تعذر تجهيز المعاينة: ${esc(e.message||'خطأ غير معروف')}</div>`;}
       finally{previewBtn.disabled=false;}
