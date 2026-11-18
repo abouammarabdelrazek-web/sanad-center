@@ -1636,9 +1636,9 @@ tr.voided td{opacity:.55;text-decoration:line-through}
         const {data,error}=await entriesQ.order('entry_date',{ascending:true}).limit(5000);
         if(error)throw error;
         const rows=data||[],income=rows.filter(x=>x.entry_type==='income').reduce((a,x)=>a+Number(x.amount||0),0),expenses=rows.filter(x=>x.entry_type==='expense').reduce((a,x)=>a+Number(x.amount||0),0);
-        const byMethod={};rows.forEach(x=>{const key=x.payment_method||'غير محدد';byMethod[key]=(byMethod[key]||0)+Number(x.amount||0);});
+        const byMethod={};rows.forEach(x=>{const key=x.payment_method||'غير محدد';byMethod[key]??={income:0,expenses:0};byMethod[key][x.entry_type==='income'?'income':'expenses']+=Number(x.amount||0);});
         host.innerHTML=`<div class="stats">${stat('إجمالي الإيرادات',money(income),'حسب القيود المسجلة')}${stat('إجمالي المصروفات',money(expenses),'حسب القيود المسجلة')}${stat('صافي اليوم',money(income-expenses),'الإيرادات ناقص المصروفات')}${stat('عدد القيود',rows.length,'تشمل القيود العكسية المسجلة')}</div>
-          <div class="table-wrap"><table><thead><tr><th>طريقة الدفع</th><th>صافي الحركات المسجلة</th></tr></thead><tbody>${Object.entries(byMethod).map(([k,v])=>`<tr><td>${esc(({cash:'نقدي',card:'بطاقة',transfer:'تحويل',other:'أخرى'})[k]||k)}</td><td>${money(v)}</td></tr>`).join('')||'<tr><td colspan="2">لا توجد حركات</td></tr>'}</tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>طريقة الدفع</th><th>الإيرادات</th><th>المصروفات</th></tr></thead><tbody>${Object.entries(byMethod).map(([k,v])=>`<tr><td>${esc(({cash:'نقدي',card:'بطاقة',transfer:'تحويل',other:'أخرى'})[k]||k)}</td><td>${money(v.income)}</td><td>${money(v.expenses)}</td></tr>`).join('')||'<tr><td colspan="3">لا توجد حركات</td></tr>'}</tbody></table></div>
           <p class="muted small">النطاق: ${dept?esc(deptName(dept)):'كل المركز'} — ${date}. المعاينة لا تنشئ إقفالًا ولا تغيّر أي رصيد.</p>
           <div class="toolbar"><button class="btn danger" id="executeFinancialClose" type="button" ${rows.length===0?'disabled':''}>اعتماد الإقفال المالي</button></div>
           ${rows.length===0?'<div class="notice">لا توجد حركات مالية في هذا النطاق؛ لن نسمح بإنشاء إقفال فارغ من هذه الشاشة.</div>':''}`;
