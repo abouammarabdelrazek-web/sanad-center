@@ -961,11 +961,12 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       if(hint)hint.textContent=requiredSex
         ? (compatible.length?'القائمة تعرض المرضى من النوع المتوافق مع هذا القسم فقط.':'لا يوجد مريض مسجل بالنوع المتوافق مع هذا القسم.')
         : 'اختر مريضًا مرتبطًا بالقسم المحدد في ملفه.';
+      refreshAppointmentDuration();
     };
     $('apptForm').elements.department_id.addEventListener('change',refreshPatientOptionsForDepartment);
     $('cancelAppt').addEventListener('click',appointmentsPage);
     $('apptForm').elements.patient_id.addEventListener('change',refreshPackages);
-    $('apptForm').elements.department_id.addEventListener('change',()=>{refreshPackages();refreshAppointmentDuration();});
+    $('apptForm').elements.department_id.addEventListener('change',()=>{refreshPackages();});
     const syncAppointmentPriceField=()=>{const type=$('apptForm').elements.appointment_type.value,individual=type==='therapy'&&!$('appointmentPackage').value,assessment=type==='assessment'&&!existing?.package_id;const pf=$('appointmentPackageField'),sf=$('appointmentSessionPriceField'),si=$('apptForm').elements.session_price,af=$('appointmentAssessmentPriceField'),ai=$('apptForm').elements.assessment_price;pf.style.display=type==='therapy'?'':'none';sf.style.display=individual?'':'none';si.disabled=!individual;si.required=individual;af.style.display=assessment?'':'none';ai.disabled=!assessment;ai.required=assessment;if(!individual)si.value='';};
     $('apptForm').elements.appointment_type.addEventListener('change',syncAppointmentPriceField);
     $('appointmentPackage').addEventListener('change',()=>{syncAppointmentPriceField();if(!$('appointmentPackage').value||$('appointmentPackage').value==='__none__')refreshAppointmentDuration();});
