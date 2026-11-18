@@ -934,9 +934,23 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     const patients=pRes.data||[];
     const depts=allowedDepartments();
     const defaultDept=existing?.department_id||(depts.some(d=>d.id===state.profile.department_id)?state.profile.department_id:depts[0]?.id);
+    const fetchDepartmentPatientIds=async departmentId=>{
+      const ids=new Set();let offset=0;
+      while(true){
+        const {data,error}=await sb.from('patient_departments').select('patient_id').eq('department_id',departmentId).range(offset,offset+999);
+        if(error)throw new Error('تعذر تحميل المرضى المرتبطين بالقسم: '+error.message);
+        const batch=data||[];batch.forEach(x=>ids.add(x.patient_id));offset+=batch.length;
+        if(batch.length<1000)break;
+      }
+      return ids;
+    };
+    let initialDepartmentPatientIds;
+    try{initialDepartmentPatientIds=await fetchDepartmentPatientIds(defaultDept);}
+    catch(error){setPage('إضافة موعد',`<div class="notice error">${esc(error.message)}</div>`);return;}
+    const initialEligiblePatients=patients.filter(p=>(p.department_id===defaultDept||initialDepartmentPatientIds.has(p.id))&&(defaultDept==='adult_male_pt'?p.sex==='male':defaultDept==='adult_female_pt'?p.sex==='female':true));
     const localDate=existing?new Date(new Date(existing.appointment_at).getTime()-new Date(existing.appointment_at).getTimezoneOffset()*60000).toISOString().slice(0,16):'';
     const apptType=existing?.appointment_type||'therapy';
-    setPage(editId?'تعديل الموعد':'إضافة موعد',`<form id="apptForm"><div class="form-grid"><div class="field span-2"><label>المريض *</label><select name="patient_id" required><option value="">اختر المريض</option>${patients.filter(p=>defaultDept==='adult_male_pt'?p.sex==='male':defaultDept==='adult_female_pt'?p.sex==='female':true).map(p=>`<option value="${esc(p.id)}" ${p.id===existing?.patient_id?'selected':''}>${esc(p.full_name)}</option>`).join('')}</select><small class="muted" id="patientDepartmentHint">اختر مريضًا مرتبطًا بالقسم المحدد في ملفه.</small></div><div class="field"><label>القسم *</label><select name="department_id" required>${depts.map(d=>`<option value="${esc(d.id)}" ${d.id===defaultDept?'selected':''}>${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label>نوع الموعد *</label><select name="appointment_type"><option value="assessment" ${apptType==='assessment'?'selected':''}>كشف / تقييم أولي</option><option value="therapy" ${apptType==='therapy'?'selected':''}>جلسة علاجية</option></select></div><div class="field span-2" id="appointmentPackageField" style="${apptType==='therapy'?'':'display:none'}"><label>الباقة العلاجية (اختياري)</label><select name="package_id" id="appointmentPackage"><option value="">اختر باقة أو جلسة فردية</option></select><small class="muted">الباقة تشمل الجلسات العلاجية فقط؛ الكشف خدمة مستقلة ولا يرتبط بالباقة.</small></div><div class="field"><label>التاريخ والوقت *</label><input name="appointment_at" type="datetime-local" value="${esc(localDate)}" required></div><div class="field"><label>المعالج المسؤول *</label><select name="therapist_id" id="appointmentTherapist" required><option value="">اختر المعالج</option>${state.therapists.filter(x=>x.department_ids.includes(defaultDept)).map(x=>`<option value="${esc(x.id)}" ${x.id===existing?.therapist_id?'selected':''}>${esc(x.full_name)}${x.job_title?' — '+esc(x.job_title):''}</option>`).join('')}</select></div><div class="field span-2"><div id="doctorDaySchedule" class="analysis-note">اختر التاريخ والمعالج لعرض مواعيده المحجوزة في هذا اليوم.</div></div><div class="field"><label>المدة بالدقائق *</label><input name="duration" type="number" min="5" max="240" value="${esc(existing?.duration_minutes??'')}" required><small class="muted" id="durationHint">تُحمّل المدة الافتراضية من إعدادات المريض والقسم.</small></div><div class="field" id="appointmentSessionPriceField" style="${apptType==='therapy'&&!existing?.package_id?'':'display:none'}"><label>سعر الجلسة (ج.م) *</label><input name="session_price" type="number" min="0.01" step="0.01" value="${esc(existing?.session_price??'')}" required><small class="muted">يُحفظ السعر مع الموعد ويُستخدم عند إتمام الجلسة.</small></div><div class="field" id="appointmentAssessmentPriceField" style="display:none"><label>سعر الكشف المستقل (ج.م) *</label><input name="assessment_price" type="number" min="0.01" step="0.01" value="${esc(existing?.assessment_price??'')}" disabled><small class="muted">الكشف خدمة مستقلة ولا يرتبط بالباقة.</small></div><div class="field"><label>الحالة</label><select name="status" disabled>${[[existing?.status||'scheduled',statusName(existing?.status||'scheduled')]].map(([v,l])=>`<option value="${v}" selected>${l}</option>`).join('')}</select><small class="muted">تغيير الحالة يتم من أزرار الموعد في الكلندر حتى يُسجل في سجل الحالات.</small></div><div class="field span-2"><label>ملاحظات</label><textarea name="notes">${esc(existing?.notes||'')}</textarea></div></div><div class="toolbar"><button class="btn" type="button" id="saveAppointmentBtn">${editId?'حفظ التعديلات':'حفظ الموعد'}</button><button class="btn ghost" id="cancelAppt" type="button">رجوع</button></div><div id="apptMessage"></div></form>`);
+    setPage(editId?'تعديل الموعد':'إضافة موعد',`<form id="apptForm"><div class="form-grid"><div class="field span-2"><label>المريض *</label><select name="patient_id" required><option value="">اختر المريض</option>${initialEligiblePatients.map(p=>`<option value="${esc(p.id)}" ${p.id===existing?.patient_id?'selected':''}>${esc(p.full_name)}</option>`).join('')}</select><small class="muted" id="patientDepartmentHint">اختر مريضًا مرتبطًا بالقسم المحدد في ملفه.</small></div><div class="field"><label>القسم *</label><select name="department_id" required>${depts.map(d=>`<option value="${esc(d.id)}" ${d.id===defaultDept?'selected':''}>${esc(d.name)}</option>`).join('')}</select></div><div class="field"><label>نوع الموعد *</label><select name="appointment_type"><option value="assessment" ${apptType==='assessment'?'selected':''}>كشف / تقييم أولي</option><option value="therapy" ${apptType==='therapy'?'selected':''}>جلسة علاجية</option></select></div><div class="field span-2" id="appointmentPackageField" style="${apptType==='therapy'?'':'display:none'}"><label>الباقة العلاجية (اختياري)</label><select name="package_id" id="appointmentPackage"><option value="">اختر باقة أو جلسة فردية</option></select><small class="muted">الباقة تشمل الجلسات العلاجية فقط؛ الكشف خدمة مستقلة ولا يرتبط بالباقة.</small></div><div class="field"><label>التاريخ والوقت *</label><input name="appointment_at" type="datetime-local" value="${esc(localDate)}" required></div><div class="field"><label>المعالج المسؤول *</label><select name="therapist_id" id="appointmentTherapist" required><option value="">اختر المعالج</option>${state.therapists.filter(x=>x.department_ids.includes(defaultDept)).map(x=>`<option value="${esc(x.id)}" ${x.id===existing?.therapist_id?'selected':''}>${esc(x.full_name)}${x.job_title?' — '+esc(x.job_title):''}</option>`).join('')}</select></div><div class="field span-2"><div id="doctorDaySchedule" class="analysis-note">اختر التاريخ والمعالج لعرض مواعيده المحجوزة في هذا اليوم.</div></div><div class="field"><label>المدة بالدقائق *</label><input name="duration" type="number" min="5" max="240" value="${esc(existing?.duration_minutes??'')}" required><small class="muted" id="durationHint">تُحمّل المدة الافتراضية من إعدادات المريض والقسم.</small></div><div class="field" id="appointmentSessionPriceField" style="${apptType==='therapy'&&!existing?.package_id?'':'display:none'}"><label>سعر الجلسة (ج.م) *</label><input name="session_price" type="number" min="0.01" step="0.01" value="${esc(existing?.session_price??'')}" required><small class="muted">يُحفظ السعر مع الموعد ويُستخدم عند إتمام الجلسة.</small></div><div class="field" id="appointmentAssessmentPriceField" style="display:none"><label>سعر الكشف المستقل (ج.م) *</label><input name="assessment_price" type="number" min="0.01" step="0.01" value="${esc(existing?.assessment_price??'')}" disabled><small class="muted">الكشف خدمة مستقلة ولا يرتبط بالباقة.</small></div><div class="field"><label>الحالة</label><select name="status" disabled>${[[existing?.status||'scheduled',statusName(existing?.status||'scheduled')]].map(([v,l])=>`<option value="${v}" selected>${l}</option>`).join('')}</select><small class="muted">تغيير الحالة يتم من أزرار الموعد في الكلندر حتى يُسجل في سجل الحالات.</small></div><div class="field span-2"><label>ملاحظات</label><textarea name="notes">${esc(existing?.notes||'')}</textarea></div></div><div class="toolbar"><button class="btn" type="button" id="saveAppointmentBtn">${editId?'حفظ التعديلات':'حفظ الموعد'}</button><button class="btn ghost" id="cancelAppt" type="button">رجوع</button></div><div id="apptMessage"></div></form>`);
     const refreshPackages=async()=>{
       const patientId=$('apptForm').elements.patient_id.value,departmentId=$('apptForm').elements.department_id.value;
       const select=$('appointmentPackage');const keep=select.value||existing?.package_id||'';
@@ -948,20 +962,34 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       select.value=keep;
     };
     attachPatientSelectSearch($('apptForm').elements.patient_id);
-    const refreshPatientOptionsForDepartment=()=>{
+    let patientFilterRequest=0;
+    const refreshPatientOptionsForDepartment=async()=>{
+      const request=++patientFilterRequest;
       const deptId=$('apptForm').elements.department_id.value;
       const select=$('apptForm').elements.patient_id;
       const current=select.value;
       const requiredSex=deptId==='adult_male_pt'?'male':deptId==='adult_female_pt'?'female':null;
-      const compatible=patients.filter(p=>!requiredSex||p.sex===requiredSex);
-      select.innerHTML='<option value="">اختر المريض</option>'+compatible.map(p=>`<option value="${esc(p.id)}">${esc(p.full_name)}</option>`).join('');
-      if(compatible.some(p=>p.id===current))select.value=current;
-      else if(existing&&compatible.some(p=>p.id===existing.patient_id))select.value=existing.patient_id;
       const hint=$('patientDepartmentHint');
-      if(hint)hint.textContent=requiredSex
-        ? (compatible.length?'القائمة تعرض المرضى من النوع المتوافق مع هذا القسم فقط.':'لا يوجد مريض مسجل بالنوع المتوافق مع هذا القسم.')
-        : 'اختر مريضًا مرتبطًا بالقسم المحدد في ملفه.';
-      refreshAppointmentDuration();
+      select.disabled=true;
+      if(hint)hint.textContent='جارٍ تحميل المرضى المرتبطين بالقسم…';
+      try{
+        const linkedIds=await fetchDepartmentPatientIds(deptId);
+        if(request!==patientFilterRequest)return;
+        const compatible=patients.filter(p=>(p.department_id===deptId||linkedIds.has(p.id))&&(!requiredSex||p.sex===requiredSex));
+        select.innerHTML='<option value="">اختر المريض</option>'+compatible.map(p=>`<option value="${esc(p.id)}">${esc(p.full_name)}</option>`).join('');
+        if(compatible.some(p=>p.id===current))select.value=current;
+        else if(existing&&compatible.some(p=>p.id===existing.patient_id))select.value=existing.patient_id;
+        if(hint)hint.textContent=requiredSex
+          ? (compatible.length?'القائمة تعرض المرضى المرتبطين بالقسم ومن النوع المتوافق معه فقط.':'لا يوجد مريض مرتبط بهذا القسم ومن النوع المتوافق معه.')
+          : (compatible.length?'القائمة تعرض المرضى المرتبطين بالقسم المحدد فقط.':'لا يوجد مرضى مرتبطون بهذا القسم.');
+      }catch(error){
+        if(request!==patientFilterRequest)return;
+        select.innerHTML='<option value="">تعذر تحميل المرضى</option>';
+        if(hint)hint.textContent=error.message;
+      }finally{
+        if(request===patientFilterRequest)select.disabled=false;
+      }
+      if(request===patientFilterRequest){refreshPackages();refreshAppointmentDuration();}
     };
     $('apptForm').elements.department_id.addEventListener('change',refreshPatientOptionsForDepartment);
     $('cancelAppt').addEventListener('click',appointmentsPage);
