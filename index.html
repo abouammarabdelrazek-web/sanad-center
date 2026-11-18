@@ -1633,9 +1633,9 @@ tr.voided td{opacity:.55;text-decoration:line-through}
         if(closingRes.data){host.innerHTML='<div class="notice error">تم إقفال هذا اليوم/القسم من قبل. لا يمكن إنشاء إقفال مكرر.</div>';return;}
         let entriesQ=sb.from('financial_entries').select('id,entry_type,amount,category,payment_method,department_id,entry_date,reversal_of').gte('entry_date',bounds.start).lt('entry_date',bounds.end);
         if(dept)entriesQ=entriesQ.eq('department_id',dept);
-        const {data,error}=await entriesQ.order('entry_date',{ascending:true}).limit(5000);
-        if(error)throw error;
-        const rows=data||[],income=rows.filter(x=>x.entry_type==='income').reduce((a,x)=>a+Number(x.amount||0),0),expenses=rows.filter(x=>x.entry_type==='expense').reduce((a,x)=>a+Number(x.amount||0),0);
+        let rows=[],offset=0;
+        while(true){const {data,error}=await entriesQ.order('entry_date',{ascending:true}).range(offset,offset+999);if(error)throw error;const batch=data||[];rows.push(...batch);offset+=batch.length;if(batch.length<1000)break;}
+        const income=rows.filter(x=>x.entry_type==='income').reduce((a,x)=>a+Number(x.amount||0),0),expenses=rows.filter(x=>x.entry_type==='expense').reduce((a,x)=>a+Number(x.amount||0),0);
         const byMethod={};rows.forEach(x=>{const key=x.payment_method||'غير محدد';byMethod[key]??={income:0,expenses:0};byMethod[key][x.entry_type==='income'?'income':'expenses']+=Number(x.amount||0);});
         host.innerHTML=`<div class="stats">${stat('إجمالي الإيرادات',money(income),'حسب القيود المسجلة')}${stat('إجمالي المصروفات',money(expenses),'حسب القيود المسجلة')}${stat('صافي اليوم',money(income-expenses),'الإيرادات ناقص المصروفات')}${stat('عدد القيود',rows.length,'تشمل القيود العكسية المسجلة')}</div>
           <div class="table-wrap"><table><thead><tr><th>طريقة الدفع</th><th>الإيرادات</th><th>المصروفات</th></tr></thead><tbody>${Object.entries(byMethod).map(([k,v])=>`<tr><td>${esc(({cash:'نقدي',card:'بطاقة',transfer:'تحويل',other:'أخرى'})[k]||k)}</td><td>${money(v.income)}</td><td>${money(v.expenses)}</td></tr>`).join('')||'<tr><td colspan="3">لا توجد حركات</td></tr>'}</tbody></table></div>
