@@ -96,6 +96,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     ['packages','▣','الباقات والتحصيل',['admin','secretary','receptionist']],
     ['debts','ج.م','تحصيل المديونيات',['admin','secretary','accountant']],
     ['dailyFinance','ج.م','حركة مالية اليوم',['admin','secretary','receptionist']],
+    ['financialClosing','▣','الإقفال المالي',['admin']],
     ['finances','ج.م','التقارير المالية',['admin','accountant']],
     ['accountantData','▤','كل الجداول — عرض فقط',['accountant']],
     ['therapistWork','◷','حساب عمل المعالجين',['admin','accountant','technical_manager']],
@@ -330,6 +331,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       else if(page==='finances') await financesPage();
       else if(page==='accountantData') await accountantDataPage();
       else if(page==='dailyFinance') await dailyFinancePage();
+      else if(page==='financialClosing') await financialClosingPage();
       else if(page==='management') await managementPage();
       else if(page==='followup') await patientFollowupPage();
       else if(page==='audit') await auditLogPage();
@@ -1603,6 +1605,58 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     renderFinanceCategory();
     financeFormEl.addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.currentTarget),entryDate=f.get('entry_date');if(secretaryLimited&&entryDate!==today){msg($('financeMessage'),'يمكن للسكرتارية تسجيل الحركات بتاريخ اليوم فقط.');return;}const payload={entry_type:f.get('entry_type'),amount:Number(f.get('amount')),entry_date:new Date(new Date(cairoDayBounds(entryDate).start).getTime()+12*60*60*1000).toISOString(),category:f.get('category').trim(),department_id:f.get('department_id')||null,payment_method:f.get('payment_method')||null,description:f.get('description')||null,created_by:state.user.id};const btn=e.currentTarget.querySelector('button[type=submit]');btn.disabled=true;const {error}=await sb.from('financial_entries').insert(payload);btn.disabled=false;if(error){msg($('financeMessage'),'لم يتم الحفظ: '+error.message);return;}msg($('financeMessage'),'تم تسجيل الحركة المالية.','success');setTimeout(()=>isRole('accountant')?financesPage():dailyFinancePage(),700);});
   }
+  async function financialClosingPage(){
+    if(!isAdmin()){setPage('الإقفال المالي','<div class="notice error">الإقفال المالي متاح للمدير الإداري فقط.</div>');return;}
+    const today=cairoDateString();
+    const deptOptions=state.departments.map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('');
+    setPage('الإقفال المالي',`<p class="muted">معاينة إجمالي الإيرادات والمصروفات قبل إقفال اليوم. الإقفال يمنع إضافة حركات مالية جديدة إلى اليوم/القسم بعد اعتماده.</p>
+      <div class="notice">تنبيه: لا تنفّذ الإقفال إلا بعد مراجعة جميع الحركات والتأكد من مطابقة النقدية والتحويلات والبطاقات. لا يمكن تكرار إقفال نفس اليوم والنطاق.</div>
+      <div class="form-grid">
+        <div class="field"><label for="closingDate">تاريخ الإقفال</label><input id="closingDate" type="date" value="${today}" max="${today}"></div>
+        <div class="field"><label for="closingDepartment">النطاق</label><select id="closingDepartment"><option value="">كل المركز</option>${deptOptions}</select></div>
+        <div class="field full"><label for="closingNotes">ملاحظات المطابقة (اختياري)</label><textarea id="closingNotes" rows="2" placeholder="مثال: تمت مطابقة النقدية وإيصالات التحويل"></textarea></div>
+      </div>
+      <div class="toolbar"><button class="btn" id="previewFinancialClose" type="button">معاينة اليوم</button></div>
+      <div id="financialClosePreview" aria-live="polite"><div class="empty">اختر التاريخ والنطاق ثم اضغط «معاينة اليوم».</div></div>`);
+    const previewBtn=$('previewFinancialClose'),host=$('financialClosePreview');
+    previewBtn.addEventListener('click',()=>loadFinancialClosePreview());
+    async function loadFinancialClosePreview(){
+      const date=$('closingDate').value,dept=$('closingDepartment').value||null;
+      if(!date){msg(host,'اختر تاريخ الإقفال.');return;}
+      if(date>today){msg(host,'لا يمكن إقفال يوم مستقبلي.');return;}
+      previewBtn.disabled=true;host.innerHTML='<div class="empty">جارٍ حساب الحركات…</div>';
+      try{
+        let closeQ=sb.from('financial_closings').select('id,closing_date,department_id').eq('closing_date',date);
+        closeQ=dept?closeQ.eq('department_id',dept):closeQ.is('department_id',null);
+        const [closingRes,bounds]=[await closeQ.maybeSingle(),cairoDayBounds(date)];
+        if(closingRes.error)throw closingRes.error;
+        if(closingRes.data){host.innerHTML='<div class="notice error">تم إقفال هذا اليوم/القسم من قبل. لا يمكن إنشاء إقفال مكرر.</div>';return;}
+        let entriesQ=sb.from('financial_entries').select('id,entry_type,amount,category,payment_method,department_id,entry_date,reversal_of').gte('entry_date',bounds.start).lt('entry_date',bounds.end);
+        if(dept)entriesQ=entriesQ.eq('department_id',dept);
+        const {data,error}=await entriesQ.order('entry_date',{ascending:true}).limit(5000);
+        if(error)throw error;
+        const rows=data||[],income=rows.filter(x=>x.entry_type==='income').reduce((a,x)=>a+Number(x.amount||0),0),expenses=rows.filter(x=>x.entry_type==='expense').reduce((a,x)=>a+Number(x.amount||0),0);
+        const byMethod={};rows.forEach(x=>{const key=x.payment_method||'غير محدد';byMethod[key]=(byMethod[key]||0)+Number(x.amount||0);});
+        host.innerHTML=`<div class="stats">${stat('إجمالي الإيرادات',money(income),'حسب القيود المسجلة')}${stat('إجمالي المصروفات',money(expenses),'حسب القيود المسجلة')}${stat('صافي اليوم',money(income-expenses),'الإيرادات ناقص المصروفات')}${stat('عدد القيود',rows.length,'تشمل القيود العكسية المسجلة')}</div>
+          <div class="table-wrap"><table><thead><tr><th>طريقة الدفع</th><th>صافي الحركات المسجلة</th></tr></thead><tbody>${Object.entries(byMethod).map(([k,v])=>`<tr><td>${esc(({cash:'نقدي',card:'بطاقة',transfer:'تحويل',other:'أخرى'})[k]||k)}</td><td>${money(v)}</td></tr>`).join('')||'<tr><td colspan="2">لا توجد حركات</td></tr>'}</tbody></table></div>
+          <p class="muted small">النطاق: ${dept?esc(deptName(dept)):'كل المركز'} — ${date}. المعاينة لا تنشئ إقفالًا ولا تغيّر أي رصيد.</p>
+          <div class="toolbar"><button class="btn danger" id="executeFinancialClose" type="button" ${rows.length===0?'disabled':''}>اعتماد الإقفال المالي</button></div>
+          ${rows.length===0?'<div class="notice">لا توجد حركات مالية في هذا النطاق؛ لن نسمح بإنشاء إقفال فارغ من هذه الشاشة.</div>':''}`;
+        $('executeFinancialClose')?.addEventListener('click',async()=>{
+          const currentDate=$('closingDate').value,currentDept=$('closingDepartment').value||null,notes=$('closingNotes').value.trim();
+          const message=`تأكيد إقفال ${currentDept?deptName(currentDept):'كل المركز'} بتاريخ ${currentDate}؟\nالإيرادات: ${money(income)}\nالمصروفات: ${money(expenses)}\nالصافي: ${money(income-expenses)}\n\nبعد الإقفال ستُمنع إضافة حركات مالية جديدة لهذا النطاق والتاريخ.`;
+          if(!window.confirm(message))return;
+          const btn=$('executeFinancialClose');btn.disabled=true;btn.textContent='جارٍ اعتماد الإقفال…';
+          const {data:closeId,error:closeError}=await sb.rpc('sanad_close_financial_day',{p_closing_date:currentDate,p_department_id:currentDept,p_notes:notes||null});
+          if(closeError){msg(host,'تعذر اعتماد الإقفال: '+closeError.message);btn.disabled=false;btn.textContent='اعتماد الإقفال المالي';return;}
+          host.insertAdjacentHTML('beforeend',`<div class="notice success">تم اعتماد الإقفال بنجاح. رقم العملية: ${esc(closeId||'—')}</div>`);
+          btn.remove();
+        });
+      }catch(e){host.innerHTML=`<div class="notice error">تعذر تجهيز المعاينة: ${esc(e.message||'خطأ غير معروف')}</div>`;}
+      finally{previewBtn.disabled=false;}
+    }
+  }
+
   async function dailyFinancePage(){
     if(!isRole('admin','secretary','receptionist')){setPage('حركة مالية اليوم','<div class="notice error">هذه الصفحة مخصصة للمدير الإداري والسكرتارية.</div>');return;}
     const today=cairoDateString(),bounds=cairoDayBounds(today);
