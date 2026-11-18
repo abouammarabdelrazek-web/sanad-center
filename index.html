@@ -99,6 +99,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     ['financialClosing','▣','الإقفال المالي',['admin']],
     ['finances','ج.م','التقارير المالية',['admin','accountant']],
     ['accountantData','▤','كل الجداول — عرض فقط',['accountant']],
+    ['scheduleReview','▣','مراجعة وأرشفة جدول الشهر',['accountant']],
     ['therapistWork','◷','حساب عمل المعالجين',['admin','accountant','technical_manager']],
     ['audit','▤','سجل العمليات',['admin']],
     ['backup','⬇','النسخ الاحتياطي',['admin']],
@@ -330,6 +331,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       else if(page==='debts') await patientDebtsPage();
       else if(page==='finances') await financesPage();
       else if(page==='accountantData') await accountantDataPage();
+      else if(page==='scheduleReview') await accountantScheduleReviewPage();
       else if(page==='dailyFinance') await dailyFinancePage();
       else if(page==='financialClosing') await financialClosingPage();
       else if(page==='management') await managementPage();
@@ -365,7 +367,7 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       const extra=role==='technical_manager'?shortcut('followup','متابعة المرضى','متابعة مرضى ومواعيد الأقسام المسندة إليك'):'';
       setPage(role==='technical_manager'?'مساحة عمل المدير الفني':'مساحة عمل المعالج',`<p class="muted" style="margin-top:0">أهلًا ${esc(state.profile.full_name||'بك')}. تظهر هنا الأقسام المسندة لحسابك فقط.</p><div class="dept-grid">${deptHtml}${extra}</div>`);
     }else if(role==='accountant'){
-      setPage('مساحة عمل المحاسب',`<p class="muted">لديك صلاحية مشاهدة جميع جداول وبيانات النظام، مع بقاء صلاحيات التعديل محكومة بسياسات قاعدة البيانات.</p><div class="dept-grid">${shortcut('finances','الإيرادات والمصروفات','التقارير والتحليلات المالية')}${shortcut('accountantData','كل جداول النظام','استعراض جميع الجداول والـ Views دون تعديل')}${shortcut('therapistWork','حساب عمل المعالجين','الجلسات المكتملة والملغاة وعدم الحضور')}</div>`);
+      setPage('مساحة عمل المحاسب',`<p class="muted">لديك صلاحية مشاهدة جميع جداول وبيانات النظام والتقارير. الإجراء الإضافي الوحيد هو اعتماد مراجعة وأرشفة جدول شهر سابق؛ ولا تملك صلاحيات إضافة أو تعديل أو حذف بقية البيانات.</p><div class="dept-grid">${shortcut('finances','الإيرادات والمصروفات','التقارير والتحليلات المالية')}${shortcut('accountantData','كل جداول النظام','استعراض جميع الجداول والـ Views دون تعديل')}${shortcut('scheduleReview','مراجعة وأرشفة جدول الشهر','اعتماد مراجعة شهر سابق وقفل تعديل مواعيده')}${shortcut('therapistWork','حساب عمل المعالجين','الجلسات المكتملة والملغاة وعدم الحضور')}</div>`);
     }else{
       const depts=allowedDepartments();
       const deptHtml=`<div class="dept-grid">${depts.map(d=>`<button class="dept dept-open" data-department="${esc(d.id)}" type="button" style="text-align:right;cursor:pointer;color:inherit"><h4>${esc(d.name)}</h4><p>اضغط لعرض مرضى القسم وجدوله</p></button>`).join('')}</div>`;
@@ -1273,6 +1275,51 @@ tr.voided td{opacity:.55;text-decoration:line-through}
       setTimeout(appointmentsPage,900);
     });
   }
+  async function accountantScheduleReviewPage(){
+    if(!isRole('accountant')){setPage('مراجعة وأرشفة جدول الشهر','<div class="notice error">هذا الإجراء متاح لحساب المحاسب فقط.</div>');return;}
+    const now=new Date(),currentMonth=cairoDateString().slice(0,7);
+    const [yy,mm]=currentMonth.split('-').map(Number);
+    const previousDate=new Date(Date.UTC(yy,mm-2,1));
+    const defaultMonth=previousDate.toISOString().slice(0,7);
+    setPage('مراجعة وأرشفة جدول الشهر',`<p class="muted">راجع بيانات جدول الشهر السابق قبل اعتماده. بعد الاعتماد تصبح مواعيد هذا الشهر للقراءة فقط، ويُمنع إضافة مواعيد إليه أو تعديلها أو حذفها.</p>
+      <div class="notice">هذا هو الإجراء الاستثنائي الوحيد المتاح للمحاسب خارج المشاهدة. لا يتيح تعديل المواعيد أو حذفها.</div>
+      <div class="form-grid"><div class="field"><label for="reviewMonth">الشهر المطلوب مراجعته</label><input id="reviewMonth" type="month" value="${defaultMonth}" max="${previousDate.toISOString().slice(0,7)}"></div></div>
+      <div class="toolbar"><button class="btn" id="loadScheduleReview" type="button">معاينة جدول الشهر</button></div>
+      <div id="scheduleReviewPreview"><div class="empty">اختر الشهر ثم اعرض المعاينة.</div></div>`);
+    const loadBtn=$('loadScheduleReview'),host=$('scheduleReviewPreview');
+    loadBtn.addEventListener('click',loadPreview);
+    async function loadPreview(){
+      const month=$('reviewMonth').value;
+      if(!month){msg(host,'اختر الشهر المطلوب مراجعته.');return;}
+      if(month>=currentMonth){msg(host,'يمكن مراجعة شهر سابق فقط.');return;}
+      loadBtn.disabled=true;host.innerHTML='<div class="empty">جارٍ تحميل ملخص الجدول…</div>';
+      try{
+        const monthStart=month+'-01',monthEnd=nextMonthStart(month);
+        const [reviewRes,bounds]=[await sb.from('sanad_monthly_schedule_reviews').select('month_start,status,reviewed_at').eq('month_start',monthStart).maybeSingle(),cairoDayBounds(monthStart)];
+        if(reviewRes.error)throw reviewRes.error;
+        const endBounds=cairoDayBounds(monthEnd);
+        const {data,error}=await sb.from('sanad_calendar_appointments').select('id,status,department_id,appointment_type').gte('appointment_at',bounds.start).lt('appointment_at',endBounds.start).limit(10000);
+        if(error)throw error;
+        const rows=data||[],countStatus=status=>rows.filter(x=>x.status===status).length;
+        const byDept={};rows.forEach(x=>{byDept[x.department_id||'غير محدد']=(byDept[x.department_id||'غير محدد']||0)+1;});
+        const reviewed=!!reviewRes.data;
+        host.innerHTML=`<div class="stats">${stat('إجمالي المواعيد',rows.length,'في الشهر المختار')}${stat('مكتملة',countStatus('completed'),'جلسات/مواعيد مكتملة')}${stat('ملغاة',countStatus('cancelled'),'مواعيد ملغاة')}${stat('لم يحضر',countStatus('no_show'),'حالات عدم حضور')}${stat('مجدولة',countStatus('scheduled'),'مواعيد مجدولة')}</div>
+          <div class="table-wrap"><table><thead><tr><th>القسم</th><th>عدد المواعيد</th></tr></thead><tbody>${Object.entries(byDept).map(([d,n])=>`<tr><td>${esc(deptName(d))}</td><td>${n}</td></tr>`).join('')||'<tr><td colspan="2">لا توجد مواعيد في هذا الشهر</td></tr>'}</tbody></table></div>
+          ${reviewed?`<div class="notice success">هذا الشهر تمت مراجعته وأرشفته بالفعل بتاريخ ${dateTime(reviewRes.data.reviewed_at)}. الجدول مقفول للتعديل.</div>`:`<div class="notice">المعاينة لا تغيّر أي بيانات. عند الاعتماد سيُقفل هذا الشهر أمام إضافة المواعيد أو تعديلها أو حذفها.</div><div class="toolbar"><button class="btn danger" id="confirmScheduleReview" type="button">اعتماد المراجعة وأرشفة الشهر</button></div>`}`;
+        $('confirmScheduleReview')?.addEventListener('click',async()=>{
+          const monthValue=$('reviewMonth').value;
+          if(!window.confirm(`تأكيد اعتماد مراجعة وأرشفة جدول ${monthValue}؟ بعد ذلك لن يمكن تعديل مواعيد هذا الشهر أو حذفها أو إضافة مواعيد إليه.`))return;
+          const btn=$('confirmScheduleReview');btn.disabled=true;btn.textContent='جارٍ الاعتماد…';
+          const {error:rpcError}=await sb.rpc('sanad_review_schedule_month',{p_month:monthValue+'-01'});
+          if(rpcError){msg(host,'تعذر اعتماد المراجعة: '+rpcError.message);btn.disabled=false;btn.textContent='اعتماد المراجعة وأرشفة الشهر';return;}
+          await loadPreview();
+        });
+      }catch(e){host.innerHTML=`<div class="notice error">تعذر تحميل المعاينة: ${esc(e.message||'خطأ غير معروف')}</div>`;}
+      finally{loadBtn.disabled=false;}
+    }
+    loadPreview();
+  }
+
   async function accountantDataPage(){
     if(!isRole('accountant')){setPage('كل الجداول','<div class="notice error">هذه الصفحة مخصصة للمحاسب للعرض فقط.</div>');return;}
     const groups=[
