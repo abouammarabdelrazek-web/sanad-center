@@ -70,7 +70,8 @@ window.__sanadLoginReady=false;
 window.addEventListener('error',function(e){
   const box=document.getElementById('loginMessage');
   if(box && !window.__sanadLoginReady){
-    box.textContent='تعذر تشغيل جزء من التطبيق. أعد تحميل الصفحة، وإذا تكرر العطل أرسل صورة الشاشة.';
+    const detail=[e.message||'خطأ JavaScript غير محدد',e.filename?('الملف: '+e.filename.split('/').pop()):'',e.lineno?('السطر: '+e.lineno):'',e.colno?('العمود: '+e.colno):''].filter(Boolean).join(' — ');
+    box.textContent='تعذر تشغيل التطبيق قبل تسجيل الدخول: '+detail;
     box.className='notice error';
   }
 });
