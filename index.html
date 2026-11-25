@@ -75,7 +75,38 @@ tr.voided td{opacity:.55;text-decoration:line-through}
    sanad_void_package_payment(uuid,text).
    RLS/security rules are enforced in Supabase; this client does not replace them.
 */
-(() => {
+async function ensureSupabaseLoaded(){
+  if(window.supabase && typeof window.supabase.createClient==='function') return;
+  const sources=[
+    'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
+    'https://unpkg.com/@supabase/supabase-js@2'
+  ];
+  let lastError=null;
+  for(const src of sources){
+    try{
+      await new Promise((resolve,reject)=>{
+        const script=document.createElement('script');
+        script.src=src;
+        script.async=true;
+        script.onload=resolve;
+        script.onerror=()=>reject(new Error('فشل تحميل مكتبة Supabase من '+src));
+        document.head.appendChild(script);
+      });
+      if(window.supabase && typeof window.supabase.createClient==='function') return;
+      throw new Error('تم تحميل الملف لكن مكتبة Supabase غير متاحة.');
+    }catch(error){lastError=error;console.warn('Supabase CDN failed:',src,error);}
+  }
+  throw lastError||new Error('تعذر تحميل مكتبة Supabase.');
+}
+(async () => {
+  try{
+    await ensureSupabaseLoaded();
+  }catch(error){
+    const box=document.getElementById('loginMessage');
+    if(box){box.textContent='تعذر تشغيل النظام: لم يتم تحميل مكتبة الاتصال. تحقق من الإنترنت ثم أعد تحميل الصفحة.';box.className='notice error';}
+    console.error('Sanad startup failed:',error);
+    return;
+  }
   const SUPABASE_URL = 'https://faqgsuicntypjrfggeol.supabase.co';
   const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_u6mAjtA5nkFWfc47AeKfDw_6_3Kj_u2';
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
@@ -2046,11 +2077,28 @@ tr.voided td{opacity:.55;text-decoration:line-through}
     $('loginForm').addEventListener('submit',async e=>{e.preventDefault();const a=$('newPassword').value,b=$('confirmPassword').value;if(a.length<8){msg($('loginMessage'),'كلمة المرور يجب أن تكون 8 أحرف على الأقل.');return;}if(a!==b){msg($('loginMessage'),'كلمتا المرور غير متطابقتين.');return;}const btn=$('saveNewPassword');btn.disabled=true;const {error}=await sb.auth.updateUser({password:a});btn.disabled=false;if(error){msg($('loginMessage'),'تعذر تحديث كلمة المرور: '+error.message);return;}msg($('loginMessage'),'تم تحديث كلمة المرور. يمكنك العودة وتسجيل الدخول.','success');await sb.auth.signOut();setTimeout(()=>window.location.replace(window.location.pathname),1200);});
   }
   $('loginForm').addEventListener('submit',async e=>{
-    e.preventDefault();msg($('loginMessage'),'');const btn=$('loginBtn');btn.disabled=true;btn.textContent='جارٍ التحقق…';
-    const {data,error}=await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
-    if(error){msg($('loginMessage'),'تعذر الدخول: '+error.message);btn.disabled=false;btn.textContent='دخول إلى النظام';return;}
-    try{await enterApp(data.user);}catch(err){await sb.auth.signOut();msg($('loginMessage'),err.message||'حدث خطأ أثناء فتح الحساب.');}
-    btn.disabled=false;btn.textContent='دخول إلى النظام';
+    e.preventDefault();
+    msg($('loginMessage'),'');
+    const btn=$('loginBtn');
+    btn.disabled=true;
+    btn.textContent='جارٍ التحقق…';
+    try{
+      if(!sb || !sb.auth) throw new Error('خدمة تسجيل الدخول غير جاهزة. أعد تحميل الصفحة.');
+      const {data,error}=await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
+      if(error){msg($('loginMessage'),'تعذر الدخول: '+error.message);return;}
+      try{
+        await enterApp(data.user);
+      }catch(err){
+        try{await sb.auth.signOut();}catch(signOutError){console.error('Sign out after profile error failed:',signOutError);}
+        msg($('loginMessage'),err.message||'تم قبول بيانات الدخول لكن تعذر فتح مساحة العمل.');
+      }
+    }catch(error){
+      console.error('Sanad login failed:',error);
+      msg($('loginMessage'),'تعذر إكمال تسجيل الدخول. تحقق من اتصال الإنترنت وحاول مرة أخرى. '+(error?.message||''));
+    }finally{
+      btn.disabled=false;
+      btn.textContent='دخول إلى النظام';
+    }
   });
   $('logoutBtn').addEventListener('click',async()=>{await sb.auth.signOut();state.user=null;state.profile=null;$('appView').classList.add('hidden');$('loginView').classList.remove('hidden');$('logoutBtn').classList.add('hidden');$('rolePill').classList.add('hidden');$('password').value='';msg($('loginMessage'),'تم تسجيل الخروج.','success');});
   $('refreshBtn').addEventListener('click',()=>showPage(state.page));
