@@ -65,6 +65,37 @@ tr.voided td{opacity:.55;text-decoration:line-through}
 </section>
 </div>
 <script>
+/* تشخيص مبكر لتعطل تشغيل صفحة الدخول */
+window.__sanadLoginReady=false;
+window.addEventListener('error',function(e){
+  const box=document.getElementById('loginMessage');
+  if(box && !window.__sanadLoginReady){
+    box.textContent='تعذر تشغيل جزء من التطبيق. أعد تحميل الصفحة، وإذا تكرر العطل أرسل صورة الشاشة.';
+    box.className='notice error';
+  }
+});
+window.addEventListener('unhandledrejection',function(e){
+  const box=document.getElementById('loginMessage');
+  if(box && !window.__sanadLoginReady){
+    box.textContent='تعذر إكمال تهيئة التطبيق: '+(e.reason?.message||'خطأ غير متوقع')+'. أعد تحميل الصفحة.';
+    box.className='notice error';
+  }
+});
+document.addEventListener('submit',function(e){
+  if(e.target && e.target.id==='loginForm' && !window.__sanadLoginReady){
+    setTimeout(function(){
+      if(!window.__sanadLoginReady){
+        const box=document.getElementById('loginMessage');
+        if(box){
+          box.textContent='التطبيق لم يكتمل تشغيله بعد. انتظر عدة ثوانٍ ثم أعد تحميل الصفحة. إذا استمرت الرسالة فالتقط صورة لها.';
+          box.className='notice error';
+        }
+      }
+    },1200);
+  }
+},true);
+</script>
+<script>
 /* Sanad DB compatibility verification — 2026-10-31
    Project: faqgsuicntypjrfggeol
    Verified against current public schema: sanad_calendar_appointments,
@@ -88,8 +119,9 @@ async function ensureSupabaseLoaded(){
         const script=document.createElement('script');
         script.src=src;
         script.async=true;
-        script.onload=resolve;
-        script.onerror=()=>reject(new Error('فشل تحميل مكتبة Supabase من '+src));
+        const timer=setTimeout(()=>reject(new Error('انتهت مهلة تحميل مكتبة الاتصال من '+src)),8000);
+        script.onload=()=>{clearTimeout(timer);resolve();};
+        script.onerror=()=>{clearTimeout(timer);reject(new Error('فشل تحميل مكتبة Supabase من '+src));};
         document.head.appendChild(script);
       });
       if(window.supabase && typeof window.supabase.createClient==='function') return;
@@ -2100,6 +2132,7 @@ async function ensureSupabaseLoaded(){
       btn.textContent='دخول إلى النظام';
     }
   });
+  window.__sanadLoginReady=true;
   $('logoutBtn').addEventListener('click',async()=>{await sb.auth.signOut();state.user=null;state.profile=null;$('appView').classList.add('hidden');$('loginView').classList.remove('hidden');$('logoutBtn').classList.add('hidden');$('rolePill').classList.add('hidden');$('password').value='';msg($('loginMessage'),'تم تسجيل الخروج.','success');});
   $('refreshBtn').addEventListener('click',()=>showPage(state.page));
   $('sectionBody').addEventListener('click',async e=>{
