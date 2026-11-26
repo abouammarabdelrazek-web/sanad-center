@@ -1979,9 +1979,13 @@ async function ensureSupabaseLoaded(){
     const receiptIds=receipts.map(x=>x.id);
     let allocations=[];
     if(receiptIds.length){
-      const ar=await sb.from('patient_account_payment_allocations').select('receipt_id,voided_at').in('receipt_id',receiptIds);
-      if(ar.error){setPage('تحصيل المديونيات','<div class="notice error">تعذر قراءة حركات التحصيل: '+esc(ar.error.message)+'</div>');return;}
-      allocations=ar.data||[];
+      // تقسيم معرفات الإيصالات إلى دفعات صغيرة لتجنب Bad Request بسبب طول رابط REST.
+      for(let i=0;i<receiptIds.length;i+=100){
+        const batch=receiptIds.slice(i,i+100);
+        const ar=await sb.from('patient_account_payment_allocations').select('receipt_id,voided_at').in('receipt_id',batch);
+        if(ar.error){setPage('تحصيل المديونيات','<div class="notice error">تعذر قراءة حركات التحصيل: '+esc(ar.error.message)+'</div>');return;}
+        allocations.push(...(ar.data||[]));
+      }
     }
     const activeReceiptIds=new Set(allocations.filter(x=>!x.voided_at).map(x=>x.receipt_id));
     const latestByPatient={};
